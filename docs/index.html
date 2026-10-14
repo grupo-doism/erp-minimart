@@ -722,7 +722,7 @@ const ICONS = {
 };
 const VIEWS_T = [
   ["painel","Dashboard"],["receber","Contas a receber"],["pagar","Contas a pagar"],["fluxo","Fluxo de caixa"],["dre","DRE financeiro"],
-  ["sep"],["lancamentos","Lançamentos"],["fornecedores","Fornecedores"],["agenda","Agenda"],["lojas","Lojas"],["taxas","Minhas taxas"],["sep"],["chamados","Chamados"],["usuarios","Usuários"],["config","Configurações"]
+  ["sep"],["lancamentos","Lançamentos"],["taxas","Minhas taxas"],["fornecedores","Fornecedores"],["agenda","Agenda"],["lojas","Lojas"],["sep"],["chamados","Chamados"],["usuarios","Usuários"],["config","Configurações"]
 ];
 function viewsOk(){ if(plat()&&!S.tid){ return masterRede()?[["painelrede","Painel da rede"],["rede","Franqueados"],["planorede","Plano de contas da rede"],["sep"],["equiperede","Equipe da rede"],["diariorede","Diário da rede"],["meucad","Meu cadastro"]]:[["rede","Franqueados"],["sep"],["meucad","Meu cadastro"]]; }
   const v=[]; if(S.tid) VIEWS_T.forEach(x=>{ if(["chamados","diario","usuarios"].includes(x[0])&&!(gestorFranq()||plat())) return; if(VIEW_MOD[x[0]]&&nivel(VIEW_MOD[x[0]])<1) return; if(x[0]==="sep"&&(!v.length||v[v.length-1][0]==="sep")) return; v.push(x); }); while(v.length&&v[v.length-1][0]==="sep") v.pop(); return v; }
@@ -2743,11 +2743,10 @@ function vTaxas(){
     <td>${t.tipo==="fixa"?`<b>${esc(t.nome)}</b>`:`<input type="text" class="tx-nome" data-ti="${i}" value="${esc(t.nome)}" ${ed?"":"disabled"} placeholder="${t.tipo==="voucher"?"Ex.: Alelo, Ticket, VR, Sodexo":"Nome da forma de venda"}" aria-label="Nome da forma de venda">`}
       ${t.tipo==="voucher"?'<div class="meta">voucher — pode renomear</div>':t.tipo==="extra"?'<div class="meta">taxa adicionada por você</div>':""}</td>
     <td><div class="tx-pct"><input type="text" inputmode="decimal" class="tx-pct-in" data-ti="${i}" value="${esc(pctTxt(t.pct))}" ${ed?"":"disabled"} placeholder="0,00" aria-label="Taxa de ${esc(t.nome)} em %"><span>%</span></div></td>
-    <td class="num note">${rec==null?"—":`R$ ${rec.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}`}</td>
     <td class="r">${ed&&t.tipo==="extra"?`<button class="icon-btn" data-act="tx-del" data-i="${i}">Excluir</button>`:""}</td></tr>`; };
-  return header("Minhas taxas","Porcentagem cobrada pela maquininha ou pela operadora em cada forma de venda. Use para conferir os recebimentos e calcular o valor líquido das vendas.",ed?`<button class="btn" data-act="tx-nova">+ Nova taxa de venda</button><button class="btn pri" data-act="tx-salvar">Salvar taxas</button>`:"")
+  return header("Minhas taxas","Porcentagem cobrada pela maquininha ou pela operadora em cada forma de venda. O sistema calcula sozinho a taxa sobre as vendas de cada modalidade e lança como despesa (dedução) no DRE.",ed?`<button class="btn" data-act="tx-nova">+ Nova taxa de venda</button><button class="btn pri" data-act="tx-salvar">Salvar taxas</button>`:"")
    + banners()
-   + `<div class="grid g2e"><div class="tbl-wrap"><table class="taxas"><thead><tr><th>Forma de venda</th><th style="width:150px">Taxa</th><th>Você recebe de cada R$ 100</th><th></th></tr></thead><tbody>${ls.map(linha).join("")}</tbody></table></div>
+   + `<div class="grid g2e"><div class="tbl-wrap"><table class="taxas"><thead><tr><th>Forma de venda</th><th style="width:150px">Taxa</th><th></th></tr></thead><tbody>${ls.map(linha).join("")}</tbody></table></div>
      <div class="panel" style="align-self:start"><h2>Como preencher</h2><ol class="steps">
        <li>Informe a taxa em porcentagem, com vírgula. Ex.: <b>3,19</b> para 3,19%.</li>
        <li>Nos <b>vouchers</b>, troque o nome pelo da operadora que você aceita (Alelo, Ticket, VR, Sodexo…).</li>
