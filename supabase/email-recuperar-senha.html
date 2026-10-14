@@ -1,0 +1,16 @@
+<!-- Supabase → Authentication → Emails → Templates → "Reset password"
+     Assunto sugerido: ERP MiniMart — criar nova senha
+     Cole este conteúdo no campo "Message body". -->
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#111">
+  <div style="background:#000;padding:18px 24px;border-bottom:4px solid #38B6FF">
+    <span style="color:#38B6FF;font-weight:bold;font-size:18px;letter-spacing:1px">ERP MINIMART</span>
+  </div>
+  <div style="padding:24px">
+    <h2 style="margin:0 0 12px">Criar nova senha</h2>
+    <p>Recebemos um pedido para criar uma nova senha de acesso ao ERP MiniMart.</p>
+    <p style="margin:24px 0">
+      <a href="{{ .ConfirmationURL }}" style="background:#38B6FF;color:#000;font-weight:bold;text-decoration:none;padding:12px 22px;border-radius:8px;display:inline-block">Criar nova senha</a>
+    </p>
+    <p style="color:#666;font-size:13px">O link vale por 1 hora. Se você não pediu, ignore este e-mail — sua senha atual continua valendo.</p>
+  </div>
+</div>
