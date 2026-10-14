@@ -2102,8 +2102,10 @@ const mascaraEmail = e => { const [u,d]=String(e||"").split("@"); return d ? u.s
 async function chamar(nome,dados){
   if(nome==="resolverLogin"){ const {data,error}=await FB.sb.rpc("resolver_login",{p_doc:dados.login}); if(error) throw new Error(msgErro(error)); return {email:data}; }
   if(nome==="recalcularIndicadores"){ await carregarIndicadores(); return {franqueados:S.tenants.length,lancamentos:"todos os"}; }
-  const {data,error}=await FB.sb.functions.invoke("admin",{body:{acao:nome,...(dados||{})}});
-  if(error){ let m=error.message; try{ const b=await error.context.json(); m=(b&&b.erro)||m; }catch(e){} throw new Error(m||"Não foi possível concluir a operação."); }
+  const {data:sd}=await FB.sb.auth.getSession(); const tok=sd&&sd.session&&sd.session.access_token;
+  if(!tok) throw new Error("Sua sessão expirou. Saia e entre de novo.");
+  const {data,error}=await FB.sb.functions.invoke("admin",{body:{acao:nome,...(dados||{})},headers:{Authorization:"Bearer "+FB.anon,"x-usuario-jwt":tok}});
+  if(error){ let m=error.message, st=""; try{ st=error.context.status; const b=await error.context.json(); m=(b&&(b.erro||b.message||b.msg))||m; }catch(e){} throw new Error((m||"Não foi possível concluir a operação.")+(st?` (código ${st})`:"")); }
   if(!data||data.ok===false) throw new Error((data&&data.erro)||"Não foi possível concluir a operação.");
   if(plat()) setTimeout(recarregarRede,400);
   atualizarTabelas("tenants","usuarios","diario","rede_diario");
@@ -2176,7 +2178,7 @@ function iniciar(){
     telaAviso("Configuração pendente","Preencha o arquivo config.js com a Project URL e a anon key do seu projeto Supabase (Project Settings → API) e publique de novo.");
     return;
   }
-  FB={sb:window.supabase.createClient(C.supabaseUrl,C.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})};
+  FB={anon:C.supabaseAnonKey,sb:window.supabase.createClient(C.supabaseUrl,C.supabaseAnonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})};
   S.dl={save:async({filename,data})=>{ const blob=data instanceof Blob?data:new Blob([data]); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); return {}; }};
   let ultimo=undefined;
   FB.sb.auth.onAuthStateChange((ev,sess)=>{ setTimeout(()=>{
