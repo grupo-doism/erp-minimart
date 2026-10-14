@@ -434,6 +434,11 @@ table.taxas td{vertical-align:middle}.taxas input.tx-nome{min-width:200px}
 .anl-leg{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:11.5px;color:var(--muted)}
 .anl-dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:0}
 @media (max-width:760px){.anl-row{grid-template-columns:1fr 70px 50px}.anl-t{display:none}}
+.imp-passo{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;margin-bottom:12px}
+.imp-passo>b{background:#000;color:var(--brand);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px}
+.imp-linha{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.imp-aba{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--surface)}.imp-aba.imp-off{opacity:.75}
+.imp-aba-h{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -1113,7 +1118,7 @@ function vLancamentos(){
   const f=ui.l; const rows=filtraLanc();
   const seg=(v,t)=>`<button data-f="l.tipo" data-v="${v}" aria-pressed="${f.tipo===v}">${t}</button>`;
   const rec=rows.filter(l=>l.tipo==="receita").reduce((a,l)=>a+l.valor,0), des=rows.filter(l=>l.tipo==="despesa").reduce((a,l)=>a+l.valor,0);
-  return header("Lançamentos",`${esc(ccLabel(ui.cc))} · todas as receitas e despesas, com quem lançou cada uma.`,`<button class="btn pri" data-act="new-lanc" data-tipo="despesa">+ Novo lançamento</button>`)
+  return header("Lançamentos",`${esc(ccLabel(ui.cc))} · todas as receitas e despesas, com quem lançou cada uma.`,`${isAdm()?`<button class="btn" data-act="imp-abrir">${DL_ICON.replace('M12 4v11M7 10l5 5 5-5','M12 15V4M7 9l5-5 5 5')}Importar planilha</button>`:""}<button class="btn pri" data-act="new-lanc" data-tipo="despesa">+ Novo lançamento</button>`)
     + banners()
     + `<div class="toolbar">
         ${ccSelect()}
@@ -2732,6 +2737,138 @@ function vDiario(){
    </tbody></table></div>`;
 }
 
+/* ---------- importar planilha (meses anteriores) ---------- */
+const MES_ABR=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+const ultimoDia = (ano,m) => `${ano}-${pad(m)}-${pad(new Date(ano,m,0).getDate())}`;
+function catsImportaveis(){ const cs=cfg().categorias.filter(c=>!c.auto); return GRUPOS.flatMap(g=>cs.filter(c=>(c.grupo==="venda"?"despop":c.grupo)===g.id)); }
+async function baixarModelo(btn){
+  if(!S.dl) return; const ano=+(($("#impAno")||{}).value)||new Date().getFullYear();
+  if(btn){ btn.disabled=true; btn.textContent="Gerando…"; }
+  try{
+    await loadLib(LIB_XLSX,()=>window.XLSX&&window.XLSX.utils); const X=window.XLSX; const wb=X.utils.book_new();
+    const ins=[["ERP MiniMart — modelo para importar meses anteriores"],[],
+      ["1. Cada aba é um centro de custo (Matriz e cada loja). Não mude o nome escrito em \"Centro de custo\" nem o \"código interno\"."],
+      ["2. Confira o Ano. Para outro ano, duplique a aba e troque o ano."],
+      ["3. Digite o TOTAL de cada categoria em cada mês, em reais (ex.: 12500,50). Despesas também positivas. Deixe em branco o que não houver."],
+      ["4. Separe as vendas por crédito, débito, Pix e vouchers: a taxa de cartão é calculada pelo sistema (Minhas taxas)."],
+      ["5. Não altere a coluna Código. Depois, no sistema: Lançamentos → Importar planilha → escolha o arquivo → confira a prévia → Importar."],
+      ["6. Cada valor vira um lançamento no último dia do mês, já pago/recebido nos meses passados. Dá para desfazer na mesma tela."]];
+    const wsI=X.utils.aoa_to_sheet(ins); wsI["!cols"]=[{wch:120}]; X.utils.book_append_sheet(wb,wsI,"Instruções");
+    const cats=catsImportaveis(); const gnome=g=>(GRUPOS.find(x=>x.id===g)||{}).nome||"";
+    const usados=new Set(["instrucoes"]);
+    for(const c of centros()){
+      const aoa=[["ERP MiniMart — importação de dados mensais"],["Centro de custo:","",c.id==="matriz"?"Matriz":c.nome,"","código interno:",c.id],["Ano:","",String(ano),"","Preencha com o TOTAL do mês em reais. Despesas também em valor positivo."],[],
+        ["Código","Grupo","Categoria",...MESES_L.map(m=>m.slice(0,3)),"Total","Tipo"]];
+      cats.forEach((k,i)=>{ const r=6+i; aoa.push([k.id,gnome(k.grupo==="venda"?"despop":k.grupo),k.nome,...Array(12).fill(null),{t:"n",f:`SUM(D${r}:O${r})`},k.tipo]); });
+      const ws=X.utils.aoa_to_sheet(aoa); ws["!cols"]=[{wch:13},{wch:20},{wch:40},...Array(12).fill({wch:11}),{wch:13},{wch:9}];
+      let nome=(c.id==="matriz"?"Matriz":c.nome).replace(/[\[\]\*\?\/\\:]/g," ").slice(0,28).trim()||"Loja"; let n=nome,i=2; while(usados.has(normTxt(n))) n=(nome.slice(0,25)+" "+(i++)); usados.add(normTxt(n));
+      X.utils.book_append_sheet(wb,ws,n);
+    }
+    const buf=X.write(wb,{bookType:"xlsx",type:"array"});
+    await S.dl.save({filename:`modelo-importacao-${pSlug(tNome(S.tenant))}-${ano}.xlsx`,data:new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})});
+  }catch(e){ toast("Não foi possível gerar o modelo: "+(e.message||"")); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent="Baixar modelo"; } }
+}
+function valorCelula(v){ if(v==null||v==="") return 0; if(typeof v==="number") return Math.round(Math.abs(v)*100); const c=parseMoney(String(v)); return isFinite(c)?Math.abs(c):NaN; }
+function lerPlanilha(wb){
+  const X=window.XLSX; const cats=catsImportaveis(); const abas=[];
+  const porId=id=>cats.find(c=>c.id===id)||(CAT_LEGADO[id]?cats.find(c=>c.id===CAT_LEGADO[id]):null);
+  const porNome=n=>{ const t=normTxt(String(n||"").split(" — ")[0]); return t?cats.find(c=>normTxt(c.nome.split(" — ")[0])===t):null; };
+  for(const nomeAba of wb.SheetNames){
+    const rows=X.utils.sheet_to_json(wb.Sheets[nomeAba],{header:1,raw:true,defval:null,blankrows:true});
+    let centroNome="",centroCod="",ano=null,hdr=-1,colCod=-1,colCat=-1; const colMes={};
+    const prox=(row,i)=>{ for(let j=i+1;j<row.length;j++){ if(row[j]!=null&&String(row[j]).trim()!=="") return row[j]; } return null; };
+    rows.forEach((row,ri)=>{ if(!row) return; row.forEach((cel,ci)=>{ const t=normTxt(String(cel??"")).replace(/[:\s]+$/,"");
+      if(t==="centro de custo") centroNome=String(prox(row,ci)??"").trim();
+      else if(t==="codigo interno") centroCod=String(prox(row,ci)??"").trim();
+      else if(t==="ano"&&ano==null){ const v=parseInt(String(prox(row,ci)??"")); if(v>1990&&v<2200) ano=v; }
+      else if(hdr<0&&t==="categoria"){ hdr=ri; colCat=ci; row.forEach((h,hi)=>{ const hn=normTxt(String(h??"")); if(hn==="codigo") colCod=hi; const m=MES_ABR.findIndex(a=>hn.startsWith(a)); if(m>=0&&colMes[m+1]==null) colMes[m+1]=hi; }); } }); });
+    if(hdr<0||!Object.keys(colMes).length) continue;
+    const itens=[], desconhecidas=[], invalidos=[];
+    for(let ri=hdr+1;ri<rows.length;ri++){ const row=rows[ri]; if(!row) continue;
+      const id=colCod>=0?String(row[colCod]??"").trim():""; const nome=row[colCat];
+      const vals={}; let tem=false;
+      for(const [m,ci] of Object.entries(colMes)){ const v=valorCelula(row[ci]); if(isNaN(v)) invalidos.push(`${nome||id} (${MESES_L[m-1]})`); else if(v>0){ vals[m]=v; tem=true; } }
+      if(!tem) continue;
+      const cat=(id&&porId(id))||porNome(nome);
+      if(!cat){ if(!/^total|entradas|saidas|saídas/i.test(normTxt(String(nome||"")))) desconhecidas.push(String(nome||id)); continue; }
+      for(const [m,v] of Object.entries(vals)) itens.push({cat,m:+m,v});
+    }
+    const ach = centros().find(c=>c.id===centroCod) || centros().find(c=>normTxt(c.id==="matriz"?"Matriz":c.nome)===normTxt(centroNome)) || centros().find(c=>normTxt(c.id==="matriz"?"Matriz":c.nome)===normTxt(nomeAba));
+    abas.push({nomeAba,centroNome,centro:ach?ach.id:"",ano:ano||new Date().getFullYear(),itens,desconhecidas,invalidos});
+  }
+  return abas;
+}
+let IMP=null;
+function importarModal(){
+  IMP=null;
+  const lotes={}; S.lanc.forEach(l=>{ if(!l.importLote) return; const x=lotes[l.importLote]=lotes[l.importLote]||{lote:l.importLote,n:0,t:0,quando:l.criado,cen:new Set(),meses:new Set()}; x.n++; x.t+=l.tipo==="receita"?l.valor:-l.valor; x.cen.add(cenNome(l.centro)||"—"); x.meses.add(compOf(l)); });
+  const ls=Object.values(lotes).sort((a,b)=>(b.quando||"").localeCompare(a.quando||""));
+  openModal(`<h2>Importar planilha — meses anteriores</h2>
+    <div class="imp-passo"><b>1</b><div><div class="desc">Baixe o modelo já com as suas lojas e categorias</div>
+      <div class="imp-linha"><label for="impAno" class="note">Ano</label><input id="impAno" type="number" min="2000" max="2100" value="${new Date().getFullYear()}" style="width:90px">
+      <button type="button" class="btn" data-act="imp-modelo">${DL_ICON}Baixar modelo</button></div>
+      <p class="note" style="margin:4px 0 0">Uma aba por centro de custo (Matriz e cada loja). Preencha o total de cada categoria em cada mês. A taxa de cartão não entra: o sistema calcula sozinho.</p></div></div>
+    <div class="imp-passo"><b>2</b><div><div class="desc">Escolha a planilha preenchida</div>
+      <input type="file" id="impArq" accept=".xlsx,.xls" style="margin-top:6px"></div></div>
+    <div id="impPrev"></div>
+    <div class="err" id="impErr" role="alert"></div>
+    ${ls.length?`<div class="sect">Importações anteriores</div><div class="list">${ls.map(x=>`<div class="li" style="grid-template-columns:1fr auto auto"><div><div class="desc">${dBR((x.quando||"").slice(0,10))} — ${x.n} lançamento(s)</div><div class="meta note">${esc([...x.cen].join(", "))} · ${[...x.meses].sort().map(mlabel).join(", ")}</div></div><span class="num note">saldo ${fmt(x.t)}</span><button type="button" class="btn sm danger" data-act="imp-desfazer" data-lote="${esc(x.lote)}">Desfazer</button></div>`).join("")}</div>`:""}
+    <div class="foot"><div></div><div><button type="button" class="btn" data-close>Fechar</button><button type="button" class="btn pri" id="impOk" disabled>Importar</button></div></div>`,true,m=>{
+    $("#impArq").addEventListener("change",async e=>{ const f=e.target.files[0]; if(!f) return; $("#impErr").textContent=""; $("#impPrev").innerHTML='<p class="note">Lendo a planilha…</p>';
+      try{ await loadLib(LIB_XLSX,()=>window.XLSX&&window.XLSX.utils); const wb=window.XLSX.read(await f.arrayBuffer(),{type:"array"});
+        IMP={abas:lerPlanilha(wb),arquivo:f.name}; if(!IMP.abas.length) throw new Error("Não encontrei nenhuma aba no formato do modelo (com as colunas Categoria e os meses).");
+        desenharPrevia(); }
+      catch(ex){ IMP=null; $("#impPrev").innerHTML=""; $("#impErr").textContent=ex.message||"Não foi possível ler a planilha."; $("#impOk").disabled=true; } });
+    $("#impPrev").addEventListener("change",e=>{ const t=e.target; if(t.dataset.ia!=null&&IMP){ IMP.abas[+t.dataset.ia].centro=t.value; desenharPrevia(); } });
+    $("#impOk").addEventListener("click",()=>executarImportacao($("#impOk")));
+  },"all");
+}
+function desenharPrevia(){
+  const box=$("#impPrev"); if(!box||!IMP) return;
+  let total=0; const ops=c=>`${opt("","— não importar esta aba —",c)}${centros().map(x=>opt(x.id,x.id==="matriz"?"Matriz":x.nome,c)).join("")}`;
+  box.innerHTML=`<div class="sect">Prévia — confira antes de importar</div>`+IMP.abas.map((a,i)=>{
+    const ok=a.centro&&a.itens.length; if(ok) total+=a.itens.length;
+    const ms=[...new Set(a.itens.map(x=>x.m))].sort((x,y)=>x-y);
+    const ent=m=>a.itens.filter(x=>x.m===m&&x.cat.tipo==="receita").reduce((s,x)=>s+x.v,0), sai=m=>a.itens.filter(x=>x.m===m&&x.cat.tipo!=="receita").reduce((s,x)=>s+x.v,0);
+    const existentes=a.centro?S.lanc.filter(l=>l.centro===a.centro&&ms.some(m=>compOf(l)===`${a.ano}-${pad(m)}`)).length:0;
+    return `<div class="imp-aba ${ok?"":"imp-off"}"><div class="imp-aba-h"><div><b>Aba “${esc(a.nomeAba)}”</b> <span class="note">· ano ${a.ano}${a.centroNome?` · na planilha: “${esc(a.centroNome)}”`:""}</span></div>
+      <div class="field" style="min-width:230px"><label>Importar para</label><select data-ia="${i}">${ops(a.centro)}</select></div></div>
+      ${a.itens.length?`<div class="tbl-wrap" style="border:0"><table><thead><tr><th>Mês</th><th class="r">Entradas</th><th class="r">Saídas</th><th class="r">Lançamentos</th></tr></thead><tbody>${ms.map(m=>`<tr><td>${MESES_L[m-1]}/${a.ano}</td><td class="r num tipo-r">${fmt(ent(m))}</td><td class="r num tipo-d">${fmt(sai(m))}</td><td class="r num">${a.itens.filter(x=>x.m===m).length}</td></tr>`).join("")}</tbody></table></div>`:'<p class="note">Nenhum valor preenchido nesta aba.</p>'}
+      ${!a.centro&&a.itens.length?'<div class="banner lib-banner" style="margin:6px 0 0">Escolha para qual loja (ou Matriz) vão os valores desta aba.</div>':""}
+      ${existentes?`<div class="banner info" style="margin:6px 0 0">Atenção: já existem ${existentes} lançamento(s) neste centro de custo nesses meses. Os valores importados serão <b>somados</b> a eles.</div>`:""}
+      ${a.desconhecidas.length?`<div class="banner lib-banner" style="margin:6px 0 0">Linhas ignoradas (categoria não reconhecida): ${esc(a.desconhecidas.join(", "))}</div>`:""}
+      ${a.invalidos.length?`<div class="banner lib-banner" style="margin:6px 0 0">Valores inválidos ignorados: ${esc(a.invalidos.slice(0,8).join(", "))}${a.invalidos.length>8?"…":""}</div>`:""}</div>`; }).join("");
+  const b=$("#impOk"); b.disabled=!total; b.textContent=total?`Importar ${total} lançamento(s)`:"Importar";
+}
+async function executarImportacao(btn){
+  if(!IMP) return; const lote="imp_"+novoId(); const agora=new Date().toISOString(); const hojeMes=mkey(HOJE);
+  let numero=proxNumero(); const docs=[]; const resumo=[];
+  for(const a of IMP.abas){ if(!a.centro) continue; let n=0;
+    for(const it of a.itens.sort((x,y)=>x.m-y.m)){ const dia=ultimoDia(a.ano,it.m), comp=`${a.ano}-${pad(it.m)}`;
+      docs.push({id:novoId(),tid:S.tid,data:{tipo:it.cat.tipo==="receita"?"receita":"despesa",descricao:`${it.cat.nome.split(" — ")[0]} — ${MESES_L[it.m-1]}/${a.ano}`,valor:it.v,venc:dia,dataLanc:dia,competencia:comp,
+        pago:comp<hojeMes?dia:null,categoria:it.cat.id,centro:a.centro,forma:"",fornecedorId:null,obs:`Importado da planilha ${IMP.arquivo}`,numero:numero++,parcela:"",criadoPor:S.me.id,criado:agora,importLote:lote,importado:true}}); n++; }
+    if(n) resumo.push(`${cenNome(a.centro)||"Matriz"}: ${n}`); }
+  if(!docs.length) return;
+  btn.disabled=true; let feitos=0;
+  try{
+    for(let i=0;i<docs.length;i+=400){ const parte=docs.slice(i,i+400); const {error}=await FB.sb.from("lancamentos").insert(parte); if(error) throw sbErro(error); feitos+=parte.length; btn.textContent=`Importando… ${feitos}/${docs.length}`; }
+    atualizarTabelas("lancamentos");
+    diario("Importação de planilha",`${docs.length} lançamento(s) — ${resumo.join(" · ")} — arquivo ${IMP.arquivo}`,{cat:"alteracao"});
+    closeModal(); toast(`${docs.length} lançamento(s) importado(s)`); IMP=null;
+  }catch(ex){
+    if(feitos) await FB.sb.from("lancamentos").delete().eq("tid",S.tid).eq("data->>importLote",lote);
+    btn.disabled=false; btn.textContent=`Importar ${docs.length} lançamento(s)`; $("#impErr").textContent="Não foi possível importar"+(feitos?" (nada foi gravado)":"")+": "+(ex.message||"");
+  }
+}
+async function desfazerImportacao(lote,btn){
+  btn.disabled=true;
+  try{ const qtd=S.lanc.filter(l=>l.importLote===lote).length;
+    const {error}=await FB.sb.from("lancamentos").delete().eq("tid",S.tid).eq("data->>importLote",lote); if(error) throw sbErro(error);
+    atualizarTabelas("lancamentos"); diario("Importação desfeita",`${qtd} lançamento(s) removido(s)`,{cat:"alteracao"});
+    closeModal(); toast(`Importação desfeita — ${qtd} lançamento(s) removido(s)`); }
+  catch(ex){ btn.disabled=false; toast("Não foi possível desfazer: "+(ex.message||"")); }
+}
 /* ---------- minhas taxas ---------- */
 const TAXAS_PADRAO=[{id:"credito",nome:"Crédito",tipo:"fixa"},{id:"debito",nome:"Débito",tipo:"fixa"},{id:"pix",nome:"Pix",tipo:"fixa"},{id:"voucher1",nome:"Voucher 1",tipo:"voucher"},{id:"voucher2",nome:"Voucher 2",tipo:"voucher"},{id:"voucher3",nome:"Voucher 3",tipo:"voucher"},{id:"voucher4",nome:"Voucher 4",tipo:"voucher"}];
 function taxasAtuais(){ const t=(S.cfg&&Array.isArray(S.cfg.taxas))?S.cfg.taxas:[]; const out=TAXAS_PADRAO.map(p=>({...p,...(t.find(x=>x.id===p.id)||{}),tipo:p.tipo})); t.filter(x=>!TAXAS_PADRAO.some(p=>p.id===x.id)).forEach(x=>out.push({...x,tipo:"extra"})); return out; }
@@ -2902,6 +3039,9 @@ document.addEventListener("click",async e=>{
   if(act==="tx-nova"&&isAdm()){ taxasRasc=lerTaxasTela(); taxasRasc.push({id:"tx_"+rid(),nome:"",pct:"",tipo:"extra"}); render(); setTimeout(()=>{ const ns=document.querySelectorAll(".tx-nome"); if(ns.length) ns[ns.length-1].focus(); },30); return; }
   if(act==="tx-del"&&isAdm()){ taxasRasc=lerTaxasTela(); taxasRasc.splice(+a.dataset.i,1); render(); return; }
   if(act==="tx-salvar"&&isAdm()){ salvarTaxas(a); return; }
+  if(act==="imp-abrir"&&isAdm()){ importarModal(); return; }
+  if(act==="imp-modelo"){ baixarModelo(a); return; }
+  if(act==="imp-desfazer"){ confirmBtn(a,"Confirmar: apagar estes lançamentos",()=>desfazerImportacao(a.dataset.lote,a)); return; }
   if(act==="anl-modo"){ ui.anl=ui.anl||{}; ui.anl[a.dataset.k]=a.dataset.v; render(); return; }
   if(act==="ver-chamados"){ ui.view="chamados"; ui.chTab="chamados"; render(); return; }
   if(act==="ch-aba"){ ui.chTab=a.dataset.v; render(); return; }
