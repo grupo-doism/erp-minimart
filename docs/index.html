@@ -1989,7 +1989,7 @@ function autoLojaHTML(a){
   const linha=(f,i)=>`<div class="fx-row" data-i="${i}"><span class="note">de R$</span><input class="fx-de" inputmode="decimal" value="${f.de==null?"":esc(fmtIn(f.de))}" aria-label="Faturamento de"><span class="note">até R$</span><input class="fx-ate" inputmode="decimal" value="${f.ate==null?"":esc(fmtIn(f.ate))}" placeholder="acima" aria-label="Faturamento até"><input class="fx-pct" inputmode="decimal" value="${esc(pctTxt(f.pct))}" aria-label="Percentual"><span>%</span><button type="button" class="icon-btn fx-del" aria-label="Remover faixa">✕</button></div>`;
   const mens=a.mens||{on:false,valor:null,dia:7}; const ener=a.ener||{tipo:"nao",valor:null,dia:15};
   return `<div class="sect">Lançamentos automáticos da loja</div>
-    <div class="auto-box">
+    <div class="auto-box" id="autoLoja">
       <label class="chkline" style="padding-top:0"><input type="checkbox" id="au_roy" ${roy.on===false?"":"checked"}> Calcular <b>royalties</b> sobre o faturamento da loja</label>
       <div class="tx-pct" style="margin:-2px 0 6px 26px"><input id="au_roy_pct" inputmode="decimal" value="${esc(pctTxt(roy.pct??5))}" aria-label="Percentual de royalties"><span>% do faturamento</span></div>
       <div class="flabel" style="margin-top:6px">Cashback ao condomínio</div>
@@ -2017,7 +2017,7 @@ function autoLojaHTML(a){
     </div>`;
 }
 function bindAutoLoja(){
-  const box=document.querySelector(".auto-box"); if(!box) return;
+  const box=document.getElementById("autoLoja"); if(!box) return;
   box.querySelectorAll("[data-cb]").forEach(b=>b.addEventListener("click",()=>{ const v=b.dataset.cb; $("#au_cb").value=v; box.querySelectorAll("[data-cb]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.cb===v)); $("#au_cb_fixo").hidden=v!=="fixo"; $("#au_cb_fx").hidden=v!=="faixas"; }));
   $("#au_fx_add").addEventListener("click",()=>{ const rows=[...box.querySelectorAll(".fx-row")]; const ult=rows[rows.length-1]; const deAnt=ult?reaisCent(ult.querySelector(".fx-ate").value):null;
     const d=document.createElement("div"); d.innerHTML=`<div class="fx-row"><span class="note">de R$</span><input class="fx-de" inputmode="decimal" value="${deAnt!=null&&!isNaN(deAnt)?fmtIn(deAnt+1):""}"><span class="note">até R$</span><input class="fx-ate" inputmode="decimal" placeholder="acima"><input class="fx-pct" inputmode="decimal" placeholder="0,00"><span>%</span><button type="button" class="icon-btn fx-del" aria-label="Remover faixa">✕</button></div>`;
