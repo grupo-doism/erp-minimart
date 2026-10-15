@@ -446,6 +446,13 @@ table.taxas td{vertical-align:middle}.taxas input.tx-nome{min-width:200px}
 .imp-linha{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
 .imp-aba{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:var(--surface)}.imp-aba.imp-off{opacity:.75}
 .imp-aba-h{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
+table.dre tr.dre-clk{cursor:pointer}table.dre tr.dre-clk:hover td{background:var(--accent-soft)}
+.dre-seta{display:inline-block;width:14px;color:var(--accent);transition:transform .15s}tr.aberto .dre-seta{transform:rotate(90deg)}
+.dre-qtd{font-size:10.5px;color:var(--muted);background:var(--line-2);border-radius:999px;padding:0 6px;margin-left:4px}
+table.dre tr.dre-det>td{padding:0 0 10px 26px;background:var(--surface-2)}
+.dre-lista{border-left:3px solid var(--brand);background:var(--surface);border-radius:0 10px 10px 0;padding:8px 10px;margin-top:2px;overflow-x:auto}
+.dre-lista-h{font-size:12.5px;margin-bottom:6px;color:var(--ink-2)}
+.dre-lista table{width:100%;font-size:12.5px}.dre-lista th{font-size:10.5px}.dre-lista td,.dre-lista th{padding:5px 8px}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -499,7 +506,7 @@ const DEFAULT_CFG = {
     ...L("deducao","despesa",[["ded_impostos","Imposto sobre vendas"],["ded_taxas_cartao","Taxas de cartão (automático)",{auto:true}]]),
     ...L("cmv","despesa",[["cmv_merc","Compra de mercadorias"],["cmv_frete","Frete de mercadorias"],["cmv_perdas","Perdas e vencidos"]]),
     ...L("custop","despesa",[["cop_sistema","Mensalidade de sistema"],["cop_cashback","Cashback ao condomínio"],["cop_energia","Consumo de energia"],["cop_internet","Internet"],["cop_royalties","Royalties"],["cop_combustivel","Combustível"],["cop_monitoramento","Monitoramento"],["cop_sacolas","Sacolas e comunicação visual"]]),
-    ...L("despop","despesa",[["dop_frota","Manutenção e despesas com frota"],["dop_loja","Manutenção e despesas com loja"],["dop_terceiros","Serviços terceirizados"],["dop_seguros","Seguros e alarmes"]]),
+    ...L("despop","despesa",[["dop_frota","Manutenção e despesas com frota"],["dop_loja","Manutenção e despesas com loja"],["dop_terceiros","Serviços terceirizados"],["dop_seguros","Seguros e alarmes"],["dop_furtos","Furtos"]]),
     ...L("adm","despesa",[["adm_juridico","Serviços jurídicos"],["adm_contab","Serviços de contabilidade"],["adm_marketing","Marketing"],["adm_comissoes","Comissões e bonificações"],["adm_software","Software ou sistema do escritório/CD"],["adm_telefone","Telefone e internet do escritório/CD"],["adm_energia","Energia do escritório/CD"],["adm_agua","Água do escritório/CD"],["adm_aluguel","Aluguel do escritório/CD"],["adm_limpeza","Limpeza do escritório/CD"],["adm_papelaria","Papelaria e consumo do escritório/CD"],["adm_manut","Manutenção ou benfeitoria do escritório/CD"]]),
     ...L("pessoal","despesa",[["pes_salario","Salários"],["pes_prolabore","Pró-labore"],["pes_ajuda","Ajuda de custo"],["pes_beneficios","Benefícios"]]),
     ...L("financeiro","despesa",[["fin_tarifas","Tarifas bancárias e juros"]]),
@@ -789,12 +796,12 @@ function dreCalc(ini,fim,regime,cc){
     const v = sinal(l);
     const cid=l.categoria||"_"+l.tipo;
     const gg = g==="venda" ? "despop" : g;
-    byCat[cid]=byCat[cid]||{g:gg,m:{},t:0}; byCat[cid].m[k]=(byCat[cid].m[k]||0)+v; byCat[cid].t+=v;
+    byCat[cid]=byCat[cid]||{g:gg,m:{},t:0,it:[]}; byCat[cid].m[k]=(byCat[cid].m[k]||0)+v; byCat[cid].t+=v; byCat[cid].it.push({l,k,v});
     const bc=byCen[l.centro]?l.centro:""; if(v>0) byCen[bc].rec+=v; else byCen[bc].gas+=-v;
     // taxa de cartão automática: % cadastrada em "Minhas taxas" sobre cada venda da modalidade
     const modal = l.tipo==="receita" && VENDA_TAXA[l.categoria];
     if(modal){ const pc=taxaPct(modal); if(pc){ const fee=-Math.round(l.valor*pc/100); const tid="_tx_"+modal;
-      byCat[tid]=byCat[tid]||{g:"deducao",m:{},t:0}; byCat[tid].m[k]=(byCat[tid].m[k]||0)+fee; byCat[tid].t+=fee; byCen[bc].gas+=-fee; } }
+      byCat[tid]=byCat[tid]||{g:"deducao",m:{},t:0,it:[]}; byCat[tid].m[k]=(byCat[tid].m[k]||0)+fee; byCat[tid].t+=fee; byCat[tid].it.push({l,k,v:fee,pc}); byCen[bc].gas+=-fee; } }
   }
   const gsum=(g,k)=>Object.values(byCat).filter(c=>c.g===g).reduce((a,c)=>a+(k?(c.m[k]||0):c.t),0);
   const calc=k=>{ const r={}; ["receita","deducao","cmv","custop","despop","adm","pessoal","financeiro"].forEach(g=>r[g]=gsum(g,k));
@@ -1060,7 +1067,9 @@ function vDre(){
   const cell=v=>`<td class="r num ${v<0?'neg':''}">${v?fmt(v):"—"}</td>`;
   const body=DRE_LINHAS.map(([cls,key,label])=>{
     let h=`<tr class="${cls}"><td>${label}</td>${ms.map(k=>cell(d.pm[k][key])).join("")}${cell(d.tot[key])}<td class="r pct num">${pct(d.tot[key],RL)}</td></tr>`;
-    if(cls==="grp") h+=dreCats(d,key).map(([id,c])=>`<tr class="cat"><td>${esc(catBy(id)?.nome||"Sem categoria")}</td>${ms.map(k=>cell(c.m[k]||0)).join("")}${cell(c.t)}<td class="r pct num">${pct(c.t,RL)}</td></tr>`).join("");
+    if(cls==="grp") h+=dreCats(d,key).map(([id,c])=>{ const ab=!!(ui.dreAb&&ui.dreAb[id]);
+      return `<tr class="cat dre-clk ${ab?"aberto":""}" data-act="dre-abrir" data-id="${esc(id)}" title="Clique para ver os lançamentos" tabindex="0" role="button" aria-expanded="${ab}"><td><span class="dre-seta" aria-hidden="true">▸</span>${esc(catBy(id)?.nome||"Sem categoria")} <span class="dre-qtd">${c.it.length}</span></td>${ms.map(k=>cell(c.m[k]||0)).join("")}${cell(c.t)}<td class="r pct num">${pct(c.t,RL)}</td></tr>`
+        + (ab?`<tr class="dre-det"><td colspan="${ms.length+3}">${dreDetalhe(id,c)}</td></tr>`:""); }).join("");
     return h; }).join("");
   const cens=[...centros().filter(c=>ui.cc!=="lojas"||c.id!=="matriz"), ...(!ui.cc&&(d.byCen[""].rec||d.byCen[""].gas)?[{id:"",nome:"Sem loja"}]:[])];
   return header("DRE financeiro",`${esc(ccLabel(ui.cc))} · em competência, pelo mês da data do lançamento; em caixa, só o que foi pago ou recebido. Investimentos ficam fora do resultado.`,relBtns("dre"))
@@ -1079,6 +1088,20 @@ function vDre(){
         <p class="note" style="margin:8px 0 0">Despesas gerais da empresa ficam na Matriz. Para ratear, lance a despesa direto na loja que a consome.</p></div>`:""}`;
 }
 
+/* ---------- DRE: lançamentos de cada linha ---------- */
+function dreDetalhe(id,c){
+  const tx=id.startsWith("_tx_"); const caixa=ui.d.regime==="caixa";
+  const it=[...c.it].sort((a,b)=>((a.l.pago||a.l.venc||"")+a.l.numero).localeCompare((b.l.pago||b.l.venc||"")+b.l.numero));
+  const quitado=x=>!!x.l.pago; const tq=it.filter(quitado).reduce((a,x)=>a+x.v,0), ta=it.filter(x=>!quitado(x)).reduce((a,x)=>a+x.v,0);
+  const sit=l=> l.pago ? `<span class="pill st-pago">${l.tipo==="receita"?"Recebido":"Pago"} ${dBR(l.pago)}</span>` : `<span class="pill ${l.venc<HOJE?"st-vencido":"st-aberto"}">Em aberto · vence ${dBR(l.venc)}</span>`;
+  const forn=l=>{ const f=l.fornecedorId&&S.forn.find(x=>x.id===l.fornecedorId); return f?esc(f.empresa):""; };
+  return `<div class="dre-lista"><div class="dre-lista-h"><b>${it.length} lançamento(s)</b> · ${esc(mlabel(ui.d.ini))} a ${esc(mlabel(ui.d.fim))} · ${caixa?"regime de caixa (só o que foi pago/recebido)":"competência"}${!caixa?` · <span class="tipo-r">${it[0]&&it[0].v>0?"recebido":"pago"}: ${fmt(Math.abs(tq))}</span> · em aberto: ${fmt(Math.abs(ta))}`:""}${tx?' · <span class="note">taxa calculada sobre cada venda com a % de Minhas taxas</span>':""}</div>
+    <table><thead><tr><th>Nº</th><th>${caixa?"Pago/recebido em":"Mês"}</th><th>Descrição</th><th>Loja</th>${tx?'<th class="r">Venda</th><th class="r">Taxa</th>':"<th>Fornecedor</th>"}<th>Situação</th><th class="r">Valor no DRE</th><th></th></tr></thead><tbody>
+    ${it.map(x=>{ const l=x.l; return `<tr><td class="num">#${esc(l.numero||"")}</td><td class="num">${caixa?dBR(l.pago):esc(mlabel(x.k))}</td><td>${esc(l.descricao||"")}${l.importado?' <span class="tag t-propria">importado</span>':""}${l.parcela?` <span class="note">${esc(l.parcela)}</span>`:""}</td><td>${esc(cenNome(l.centro)||"—")}</td>
+      ${tx?`<td class="r num">${fmt(l.valor)}</td><td class="r num">${pctTxt(x.pc)}%</td>`:`<td>${forn(l)||'<span class="note">—</span>'}</td>`}<td>${sit(l)}</td><td class="r num ${x.v<0?"neg":"tipo-r"}">${fmt(x.v)}</td>
+      <td class="r"><button class="icon-btn" data-act="edit-lanc" data-id="${esc(l.id)}">${isAdm()?"Editar":"Ver"}</button></td></tr>`; }).join("")}
+    </tbody><tfoot><tr><td colspan="${tx?6:5}">Total da linha</td><td></td><td class="r num">${fmt(c.t)}</td><td></td></tr></tfoot></table></div>`;
+}
 /* ---------- análise por categoria (gráfico e lista) ---------- */
 const COR_GRUPO={receita:"#38B6FF",deducao:"#8A96A3",cmv:"#5B6570",custop:"#1F7AB8",despop:"#0B4F7A",adm:"#2C2C2C",pessoal:"#7A5AF8",financeiro:"#B07A00",invest:"#C0392B"};
 function catsAnalise(itens){ // itens: [{id,v}] -> agrupado por categoria
@@ -3094,6 +3117,7 @@ document.addEventListener("click",async e=>{
   if(act==="imp-abrir"&&isAdm()){ importarModal(); return; }
   if(act==="imp-modelo"){ baixarModelo(a); return; }
   if(act==="imp-desfazer"){ confirmBtn(a,"Confirmar: apagar estes lançamentos",()=>desfazerImportacao(a.dataset.lote,a)); return; }
+  if(act==="dre-abrir"){ ui.dreAb=ui.dreAb||{}; if(ui.dreAb[id]) delete ui.dreAb[id]; else ui.dreAb[id]=true; render(); return; }
   if(act==="anl-modo"){ ui.anl=ui.anl||{}; ui.anl[a.dataset.k]=a.dataset.v; render(); return; }
   if(act==="ver-chamados"){ ui.view="chamados"; ui.chTab="chamados"; render(); return; }
   if(act==="ch-aba"){ ui.chTab=a.dataset.v; render(); return; }
