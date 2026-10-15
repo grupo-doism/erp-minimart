@@ -458,6 +458,8 @@ table.dre tr.dre-det>td{padding:0 0 10px 26px;background:var(--surface-2)}
 .esc-op:has(input:checked){border-color:var(--brand);background:var(--accent-soft)}
 .esc-op input{margin-top:3px;accent-color:var(--accent)}.esc-op small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
 .link-btn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit}
+.pill-btn{background:none;border:0;padding:0;cursor:pointer;font:inherit}.pill-btn:hover .pill{outline:2px solid var(--brand);outline-offset:1px}
+.pill-btn[data-armed]{background:var(--neg);color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -1022,8 +1024,8 @@ function vContas(tipo){
           <td>${lojaTag(l.centro)}</td>
           <td>${esc(l.forma||"—")}</td>
           <td class="r num ${rec?"tipo-r":"tipo-d"}">${valCell(l)}</td>
-          <td>${statusPill(l)}</td>
-          <td class="r" style="white-space:nowrap">${isAdm()?(l.pago?`<button class="btn sm" data-act="estornar" data-id="${l.id}">Estornar</button>`:`<button class="btn sm" data-act="baixar" data-id="${l.id}">${rec?"Receber":"Pagar"}</button>`):""} <button class="icon-btn" data-act="edit-lanc" data-id="${l.id}">${isAdm()?"Editar":"Ver"}</button></td>
+          <td>${l.pago&&isAdm()?`<button type="button" class="pill-btn" data-act="estornar" data-id="${l.id}" title="Clique para voltar para ${l.venc<HOJE?"Vencido":"Em aberto"}">${statusPill(l)}</button>`:statusPill(l)}</td>
+          <td class="r" style="white-space:nowrap">${isAdm()?(l.pago?`<button class="btn sm" data-act="estornar" data-id="${l.id}" title="Desfaz o pagamento/recebimento">Voltar p/ em aberto</button>`:`<button class="btn sm" data-act="baixar" data-id="${l.id}">${rec?"Receber":"Pagar"}</button>`):""} <button class="icon-btn" data-act="edit-lanc" data-id="${l.id}">${isAdm()?"Editar":"Ver"}</button></td>
         </tr>`; }).join(""):`<tr><td colspan="7" class="empty">Nenhuma conta ${rec?"a receber":"a pagar"} com esses filtros.</td></tr>`}</tbody>
         <tfoot><tr><td colspan="4">${rows.length} lançamento(s)</td><td class="r num">${fmt(tot)}</td><td colspan="2"></td></tr></tfoot>
       </table></div>`
@@ -1089,6 +1091,9 @@ function vDre(){
       ${(()=>{ const ks=Object.keys(d.semTaxa||{}); if(!ks.length) return ""; const nomeT=id=>{ const t=taxasAtuais().find(x=>x.id===id); return t?t.nome:id; };
         const faixa=set=>{ const a=[...set].sort(); return a.length===1?mlabel(a[0]):`${mlabel(a[0])} a ${mlabel(a[a.length-1])}`; };
         return `<div class="banner lib-banner tx-falta"><b>Taxa de cartão não descontada:</b> há vendas sem taxa cadastrada para o mês da venda — ${ks.map(k=>`<b>${esc(nomeT(k))}</b> (${esc(faixa(d.semTaxa[k]))})`).join(", ")}. Se a modalidade não tem tarifa, cadastre 0. ${isAdm()||nivel("config")>=2?`<button class="btn sm pri" data-act="ir-taxas" data-mes="${esc([...d.semTaxa[ks[0]]].sort()[0])}">Cadastrar em Minhas taxas</button>`:"Peça ao master do franqueado para cadastrar em Minhas taxas."}</div>`; })()}
+      ${(()=>{ if(ui.d.regime!=="caixa") return ""; const ab=S.lanc.filter(l=>!l.pago&&inCC(l,ui.cc)&&compOf(l)>=ui.d.ini&&compOf(l)<=ui.d.fim&&(catBy(l.categoria)||{}).grupo!=="invest");
+        if(!ab.length) return ""; const tot=ab.reduce((a,l)=>a+(l.tipo==="receita"?l.valor:-l.valor),0);
+        return `<div class="banner info">No regime de <b>caixa</b> só aparece o que já foi pago ou recebido. Há <b>${ab.length} lançamento(s) em aberto</b> nesse período (saldo ${fmt(tot)}) que não entram aqui. <button class="btn sm" data-f="d.regime" data-v="competencia">Ver em competência</button></div>`; })()}
       <div class="tbl-wrap" style="margin-bottom:16px"><table class="dre">
         <thead><tr><th>Conta</th>${ms.map(k=>`<th class="r">${mlabel(k)}</th>`).join("")}<th class="r">Total</th><th class="r">% RL</th></tr></thead>
         <tbody>${body}</tbody></table></div>
@@ -1421,8 +1426,8 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&modalOpen) closeMo
 $("#modalRoot").addEventListener("mousedown",e=>{ if(e.target.hasAttribute("data-scrim")) closeModal(); });
 function confirmBtn(btn,label,fn){
   if(btn.dataset.armed){ fn(); return; }
-  btn.dataset.armed="1"; const old=btn.textContent; btn.textContent=label;
-  setTimeout(()=>{ if(btn.isConnected){ delete btn.dataset.armed; btn.textContent=old; } },4000);
+  btn.dataset.armed="1"; const old=btn.innerHTML; btn.textContent=label;
+  setTimeout(()=>{ if(btn.isConnected){ delete btn.dataset.armed; btn.innerHTML=old; } },4000);
 }
 
 /* ---------- fornecedor: campos ---------- */
@@ -3214,7 +3219,7 @@ document.addEventListener("click",async e=>{
   if(act==="new-lanc") lancForm(null,a.dataset.tipo);
   else if(act==="edit-lanc"){ const l=S.lanc.find(x=>x.id===id); if(l) lancForm(l); }
   else if(act==="baixar"&&isAdm()){ const l=S.lanc.find(x=>x.id===id); if(l) baixar(l); }
-  else if(act==="estornar"&&isAdm()){ const l=S.lanc.find(x=>x.id===id); if(l) confirmBtn(a,"Confirmar estorno",async()=>{ try{ await save("lanc",l.id,{...l,pago:null}); toast("Baixa estornada"); }catch(ex){} }); }
+  else if(act==="estornar"&&isAdm()){ const l=S.lanc.find(x=>x.id===id); if(l){ const novo=l.venc<HOJE?"Vencido":"Em aberto"; confirmBtn(a,`Confirmar: voltar para ${novo}`,async()=>{ try{ await save("lanc",l.id,{...l,pago:null}); diario("Baixa desfeita",`#${l.numero||""} ${l.descricao} — ${l.tipo==="receita"?"recebido":"pago"} em ${dBR(l.pago)} → ${novo.toLowerCase()}`,{cat:"alteracao"}); toast(`Voltou para ${novo.toLowerCase()}`); }catch(ex){} }); } }
   else if(act==="clear-c"){ ui.c={status:"todos",mes:"",q:"",mesBase:ui.c.mesBase}; render(); }
   else if(act==="clear-l"){ ui.l={tipo:"todos",mes:"",q:""}; render(); }
   else if(act==="ms-sel"){ ui.c.mes=a.dataset.k; render(); }
