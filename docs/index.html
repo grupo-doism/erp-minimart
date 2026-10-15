@@ -629,10 +629,10 @@ const fornBy = id => S.forn.find(f=>f.id===id);
 const lojaBy = id => S.lojas.find(l=>l.id===id);
 const lojaNome = x => x ? (x.condominio||x.nome||"Loja sem nome") : "";
 const lojasOrd = () => [...S.lojas].sort((a,b)=>(a.codigo||"").localeCompare(b.codigo||"")||lojaNome(a).localeCompare(lojaNome(b)));
-const centros = () => [{id:"matriz",nome:"Matriz"}, ...lojasOrd().map(l=>({id:l.id,nome:lojaNome(l)}))];
-const cenNome = id => id==="matriz" ? "Matriz" : lojaBy(id) ? lojaNome(lojaBy(id)) : "";
-const ccOk = (id,cc) => !cc || (cc==="lojas" ? !!lojaBy(id) : id===cc);
-const ccLabel = cc => !cc ? "Operação toda" : cc==="lojas" ? "Somente lojas" : (cenNome(cc)||"Centro removido");
+const centros = () => lojasOrd().map(l=>({id:l.id,nome:lojaNome(l)}));   // todo lançamento é de uma loja
+const cenNome = id => lojaBy(id) ? lojaNome(lojaBy(id)) : id==="matriz" ? "Matriz (antiga)" : "";
+const ccOk = (id,cc) => !cc || cc==="lojas" || cc==="matriz" || id===cc;
+const ccLabel = cc => (!cc||cc==="lojas"||cc==="matriz") ? "Operação toda" : (cenNome(cc)||"Loja removida");
 const inCC = (l,cc) => ccOk(l.centro,cc);
 const ccLoja = cc => cc&&cc!=="matriz"&&cc!=="lojas" ? cc : "";
 const fornNome = f => f ? (f.empresa||f.nome||"") : "";
@@ -767,9 +767,9 @@ function catOptions(tipo,sel){
     return `<optgroup label="${esc(g.nome)}">${cs.map(c=>opt(c.id,c.nome,sel)).join("")}</optgroup>`;
   }).join("");
 }
-const cenOptions = sel => centros().map(c=>opt(c.id,c.id==="matriz"?"Matriz (despesas gerais)":c.nome,sel)).join("");
+const cenOptions = sel => centros().map(c=>opt(c.id,c.nome,sel)).join("");
 function ccSelect(){
-  return `<div class="field cc-field"><label for="ccSel"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="fill:none;stroke:currentColor;stroke-width:2.2;vertical-align:-2px"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg> Filtrar por</label><select id="ccSel">${opt("","Operação toda",ui.cc)}${opt("lojas","Somente lojas",ui.cc)}${opt("matriz","Somente matriz",ui.cc)}${lojasOrd().length?`<optgroup label="Lojas (centros de custo)">${lojasOrd().map(l=>opt(l.id,lojaNome(l),ui.cc)).join("")}</optgroup>`:""}</select></div>`;
+  return `<div class="field cc-field"><label for="ccSel"><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style="fill:none;stroke:currentColor;stroke-width:2.2;vertical-align:-2px"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg> Filtrar por</label><select id="ccSel">${opt("","Operação toda",ui.cc)}${lojasOrd().length?`<optgroup label="Lojas (centros de custo)">${lojasOrd().map(l=>opt(l.id,lojaNome(l),ui.cc)).join("")}</optgroup>`:""}</select></div>`;
 }
 const relBtns = (k,o) => { o=o||{}; if(!S.dl) return ""; const x=o.xlsx!==false, pd=o.pdf!==false; return `<div class="rel-grp"><span class="flabel">Relatório</span><div class="rel-btns">${x?`<button class="btn" data-act="rel-xlsx" data-k="${k}">${DL_ICON}Planilha</button>`:""}${pd?`<button class="btn" data-act="rel-pdf" data-k="${k}">${DL_ICON}PDF</button>`:""}</div></div>`; };
 const DL_ICON='<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" style="fill:none;stroke:currentColor;stroke-width:1.8"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
@@ -876,6 +876,10 @@ const legendFlux = `<div class="legend"><span><i class="sw" style="background:va
 /* ---------- views ---------- */
 function header(t,p,acts){ return `<div class="head"><div><h1>${t}</h1>${p?`<p>${p}</p>`:""}</div>${acts?`<div class="acts">${acts}</div>`:""}</div>`; }
 function banners(){
+  if(S.tid&&S.loaded&&S.loaded.lanc&&["painel","lancamentos","receber","pagar","fluxo","dre"].includes(ui.view)){ const b=bannerSemLoja(); if(b) return b+bannersBase(); }
+  return bannersBase();
+}
+function bannersBase(){
   let b=bannerAcesso();
   if(false) b+=`<div class="banner info">Plano de contas ainda não criado. ${isAdm()?`<button class="btn sm" data-act="cfg-default" style="margin-left:8px">Criar plano de contas padrão</button>`:"Peça ao master do franqueado para criar em Configurações."}</div>`;
   if([S.lanc,S.forn,S.ag,S.lojas].some(a=>a.some(x=>x.exemplo))) b+=`<div class="banner info">Há dados de exemplo (marcados com <span class="tag ex">exemplo</span>). Quando quiser começar de verdade, remova-os em Configurações.</div>`;
@@ -900,7 +904,7 @@ function vPainel(){
   const agsCC = a => ccOk(a.lojaId,cc);
   const ags=S.ag.filter(a=>agsCC(a)&&a.data>=HOJE&&a.data<=addDays(HOJE,14)&&!a.concluido).sort((a,b)=>(a.data+agIni(a)).localeCompare(b.data+agIni(b))).slice(0,7);
   const porLoja = (!cc||cc==="lojas") ? dreCalc(cur,cur,"competencia","") : null;
-  const cens = porLoja ? [...centros().filter(c=>cc!=="lojas"||c.id!=="matriz"),...(porLoja.byCen[""].rec||porLoja.byCen[""].gas?[{id:"",nome:"Sem loja"}]:[])] : [];
+  const cens = porLoja ? [...centros(),...(porLoja.byCen[""].rec||porLoja.byCen[""].gas?[{id:"",nome:"Sem loja (mover)"}]:[])] : [];
   return `<figure class="quote" role="note">${(()=>{ const f=fraseDoDia(); return `<span class="q-lbl">Frase do dia</span><blockquote><p>${esc(f.texto)}</p></blockquote><figcaption>— ${esc(f.autor)}</figcaption>`; })()}</figure>`
    + header("Dashboard", `${new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · ${esc(ccLabel(cc))}`, relBtns("dash",{xlsx:false})+ccSelect())
    + banners()
@@ -1098,10 +1102,30 @@ function vDre(){
         <thead><tr><th>Conta</th>${ms.map(k=>`<th class="r">${mlabel(k)}</th>`).join("")}<th class="r">Total</th><th class="r">% RL</th></tr></thead>
         <tbody>${body}</tbody></table></div>
       ${(()=>{ const a=analiseDre(d); const per=`${mlabel(ui.d.ini)} a ${mlabel(ui.d.fim)} · ${ui.d.regime==="caixa"?"caixa":"competência"} · ${esc(ccLabel(ui.cc))}`; return `<div class="grid g2" style="margin-bottom:16px">${analiseHTML("dreRec","Receitas por categoria",per,a.rec)}${analiseHTML("dreGas","Custos e despesas por categoria",per,a.gas)}</div>`; })()}
-      ${(!ui.cc||ui.cc==="lojas")?`<div class="panel"><h2>Resultado por centro de custo<small>${mlabel(ui.d.ini)} a ${mlabel(ui.d.fim)} · ${ui.d.regime==="caixa"?"caixa":"competência"}</small></h2>${cenTable(d,cens)}
-        <p class="note" style="margin:8px 0 0">Despesas gerais da empresa ficam na Matriz. Para ratear, lance a despesa direto na loja que a consome.</p></div>`:""}`;
+      ${(!ui.cc)?`<div class="panel"><h2>Resultado por loja<small>${mlabel(ui.d.ini)} a ${mlabel(ui.d.fim)} · ${ui.d.regime==="caixa"?"caixa":"competência"}</small></h2>${cenTable(d,cens)}
+        <p class="note" style="margin:8px 0 0">Despesas gerais: lance na loja que a consome ou divida o valor entre as lojas.</p></div>`:""}`;
 }
 
+/* ---------- lançamentos sem loja (antiga Matriz) ---------- */
+function semLoja(){ return { lanc:S.lanc.filter(l=>!lojaBy(l.centro)), rec:S.rec.filter(r=>!lojaBy(r.centro)) }; }
+function bannerSemLoja(){
+  const x=semLoja(); if(!x.lanc.length&&!x.rec.length) return "";
+  const n=x.lanc.length, tot=x.lanc.reduce((a,l)=>a+(l.tipo==="receita"?l.valor:-l.valor),0);
+  if(!isAdm()) return `<div class="banner lib-banner">Há ${n} lançamento(s) sem loja (da antiga Matriz). Peça ao master do franqueado para movê-los para uma loja.</div>`;
+  if(!centros().length) return `<div class="banner lib-banner">Há ${n} lançamento(s) sem loja. Cadastre uma loja (menu Lojas) para poder movê-los.</div>`;
+  return `<div class="banner lib-banner sem-loja"><div><b>${n} lançamento(s) estão sem loja</b> (da antiga “Matriz”, que não existe mais${x.rec.length?` · ${x.rec.length} recorrência(s)`:""}) — saldo ${fmt(tot)}. Todo lançamento precisa ser de uma loja.</div>
+    <div class="imp-linha"><select id="slDest" aria-label="Loja de destino">${opt("","Mover para a loja…","")}${centros().map(c=>opt(c.id,c.nome,"")).join("")}</select><button class="btn sm pri" data-act="mover-sem-loja">Mover todos</button><button class="btn sm" data-act="ver-sem-loja">Ver quais são</button></div></div>`;
+}
+async function moverSemLoja(btn){
+  const dest=($("#slDest")||{}).value; if(!dest){ toast("Escolha a loja de destino."); return; }
+  const x=semLoja(); const total=x.lanc.length+x.rec.length; let feitos=0; btn.disabled=true;
+  try{
+    for(const r of x.rec){ await save("rec",r.id,{...r,centro:dest}); feitos++; btn.textContent=`Movendo… ${feitos}/${total}`; }
+    for(const l of x.lanc){ await save("lanc",l.id,{...l,centro:dest,centroAntigo:l.centro||""}); feitos++; btn.textContent=`Movendo… ${feitos}/${total}`; }
+    diario("Lançamentos movidos para loja",`${x.lanc.length} lançamento(s) e ${x.rec.length} recorrência(s) sem loja (antiga Matriz) → ${cenNome(dest)}`,{cat:"alteracao"});
+    toast(`${x.lanc.length} lançamento(s) movido(s) para ${cenNome(dest)}`);
+  }catch(e){ toast("Parou no meio — clique de novo para mover o restante."); btn.disabled=false; btn.textContent="Mover todos"; }
+}
 /* ---------- DRE: lançamentos de cada linha ---------- */
 function dreDetalhe(id,c){
   const tx=id.startsWith("_tx_"); const caixa=ui.d.regime==="caixa";
@@ -1159,7 +1183,7 @@ function filtraLanc(){
   }).sort((a,b)=>(b.criado||"").localeCompare(a.criado||"")||(+b.numero||0)-(+a.numero||0)||(a.venc||"").localeCompare(b.venc||""));
 }
 function vLancamentos(){
-  const f=ui.l; const rows=filtraLanc();
+  const f=ui.l; const rows=f.semLoja?filtraLanc().filter(l=>!lojaBy(l.centro)):filtraLanc();
   const seg=(v,t)=>`<button data-f="l.tipo" data-v="${v}" aria-pressed="${f.tipo===v}">${t}</button>`;
   const rec=rows.filter(l=>l.tipo==="receita").reduce((a,l)=>a+l.valor,0), des=rows.filter(l=>l.tipo==="despesa").reduce((a,l)=>a+l.valor,0);
   return header("Lançamentos",`${esc(ccLabel(ui.cc))} · todas as receitas e despesas, com quem lançou cada uma.`,`${isAdm()?`<button class="btn" data-act="imp-modelo" title="Planilha com o plano de contas atual (inclui as categorias que você criou), uma aba por loja">${DL_ICON}Modelo de planilha</button><button class="btn" data-act="imp-abrir">${DL_ICON.replace('M12 4v11M7 10l5 5 5-5','M12 15V4M7 9l5-5 5 5')}Importar planilha</button>`:""}<button class="btn pri" data-act="new-lanc" data-tipo="despesa">+ Novo lançamento</button>`)
@@ -1169,7 +1193,7 @@ function vLancamentos(){
         <div class="field"><span class="flabel">Tipo</span><div class="seg">${seg("todos","Todos")}${seg("receita","Receitas")}${seg("despesa","Despesas")}</div></div>
         <div class="field"><label for="flMes">Mês do lançamento</label><input type="month" id="flMes" value="${esc(f.mes)}"></div>
         <div class="field" style="flex:1;min-width:220px"><label for="flQ">Buscar</label><input type="search" id="flQ" placeholder="Assunto, fornecedor, código, nº, usuário" value="${esc(f.q)}"></div>
-        ${f.mes||f.q||f.tipo!=="todos"?'<button class="btn sm" data-act="clear-l" style="align-self:flex-end;margin-bottom:4px">Limpar</button>':''}
+        ${f.mes||f.q||f.tipo!=="todos"||f.semLoja?`<button class="btn sm" data-act="clear-l" style="align-self:flex-end;margin-bottom:4px">${f.semLoja?"Mostrando só os sem loja · Limpar":"Limpar"}</button>`:''}
       </div>
       <div class="stats-row" style="margin-bottom:14px"><div><small>Lançamentos</small><b>${rows.length}</b></div><div><small>Receitas</small><b class="tipo-r">${fmt(rec)}</b></div><div><small>Despesas</small><b class="tipo-d">${fmt(des)}</b></div><div><small>Diferença</small><b class="${rec-des<0?"neg":""}">${fmt(rec-des)}</b></div></div>
       <div class="tbl-wrap"><table>
@@ -1320,7 +1344,7 @@ function vConfig(){
         ${isAdm()?`<button class="btn" style="margin-top:14px" data-act="edit-cat">+ Nova categoria própria</button>`:""}
       </div>
       <div class="grid" style="gap:16px;align-content:start">
-        <div class="panel"><h2>Centros de custo</h2><p class="note" style="margin:0 0 10px">Os centros de custo são as lojas cadastradas, mais a Matriz para despesas gerais.</p>
+        <div class="panel"><h2>Centros de custo</h2><p class="note" style="margin:0 0 10px">Todo lançamento pertence a uma loja. Despesas gerais: lance na loja que a consome ou divida o valor entre as lojas.</p>
           <div class="list cfg-list">${centros().map(x=>`<div class="li"><span>${esc(x.nome)}</span><span class="note">${S.lanc.filter(l=>l.centro===x.id).length} lanç.</span><span></span></div>`).join("")}</div>
           <button class="btn" style="margin-top:12px" data-nav="lojas">Gerenciar lojas</button></div>
         <div class="panel"><h2>Dados de exemplo</h2>
@@ -1384,6 +1408,7 @@ function render(){
   if(!S.me||document.body.classList.contains("auth")) return;
   if(S.mode==="loading"){ main.innerHTML=`<div class="empty" style="padding-top:20vh">Carregando dados…</div>`; return; }
   if(ui.view!=="taxas") taxasRasc=null;
+  if(ui.cc==="lojas"||ui.cc==="matriz") ui.cc="";
   const vok=viewsOk();
   if(!vok.some(v=>v[0]===ui.view)){ const pri=vok.find(v=>v[0]!=="sep"); ui.view = pri?pri[0]:"painel"; }
   computeRole();
@@ -1487,7 +1512,7 @@ function lancForm(l,tipoDefault){
       <div class="sect">Dados do lançamento</div>
       <div class="row">
         <div class="field"><label for="lCat">Categoria</label><select id="lCat">${opt("","Selecione…","")}${catOptions(tipo,l.categoria)}</select></div>
-        <div class="field"><label for="lCen">Centro de custo (loja)</label><select id="lCen">${opt("","Selecione…",l.centro)}${cenOptions(l.centro)}</select></div>
+        <div class="field"><label for="lCen">Loja</label><select id="lCen">${opt("",centros().length?"Selecione a loja…":"Cadastre uma loja primeiro (em Lojas)",lojaBy(l.centro)?l.centro:"")}${cenOptions(l.centro)}</select></div>
       </div>
       <div class="row3">
         <div class="field"><label for="lData">Data do lançamento</label><input type="date" id="lData" value="${esc(l.dataLanc||l.venc||HOJE)}"></div>
@@ -1607,7 +1632,7 @@ function lancForm(l,tipoDefault){
         const algumForn=campos.some(c=>c.value.trim());
         if(!fid&&algumForn){ if(!fornValidate("lf",err)) return; const dup=fornPorDoc(doc.value)||(!digitos(doc.value)?fornPorNome(emp.value):null); if(dup) fid=dup.id; else novoForn=true; }
         if(!$("#lCat").value) return fail("Escolha a categoria — ela define onde o valor entra no DRE.",$("#lCat"));
-        if(!$("#lCen").value) return fail("Escolha o centro de custo (Matriz ou uma loja).",$("#lCen"));
+        if(!$("#lCen").value||!lojaBy($("#lCen").value)) return fail(centros().length?"Escolha a loja do lançamento.":"Cadastre uma loja primeiro (menu Lojas) — todo lançamento pertence a uma loja.",$("#lCen"));
         if(!dataLanc) return fail("Informe a data do lançamento.",$("#lData"));
         if(!$("#lForma").value) return fail("Escolha a forma de pagamento.",$("#lForma"));
         const varv = isNew ? cond==="rv" : ehVariavel(l);
@@ -2816,7 +2841,7 @@ async function baixarModelo(btn){
     // aba de instruções
     const I=[[C(`${tNome(S.tenant)} — modelo para importar meses anteriores`,st.titulo)],[],
       [C("Como preencher",st.insT)],
-      [C("1. Cada aba é um centro de custo (Matriz e cada loja). Não mude o nome em \"Centro de custo\" nem o \"código interno\".",st.ins)],
+      [C("1. Cada aba é uma loja. Não mude o nome em \"Centro de custo\" nem o \"código interno\".",st.ins)],
       [C("2. Confira o Ano (célula amarela). Para outro ano, duplique a aba e troque o ano.",st.ins)],
       [C("3. Digite o TOTAL de cada categoria em cada mês, em reais (ex.: 12500,50). Despesas também em valor positivo. Deixe em branco o que não houver.",st.ins)],
       [C("4. Separe as vendas por crédito, débito, Pix e vouchers: a taxa de cartão é calculada pelo sistema (Minhas taxas), por isso não há linha para ela.",st.ins)],
@@ -2828,7 +2853,7 @@ async function baixarModelo(btn){
     const wsI=X.utils.aoa_to_sheet(I); wsI["!cols"]=[{wch:125}]; wsI["!rows"]=[{hpt:28}]; X.utils.book_append_sheet(wb,wsI,"Instruções");
     const usados=new Set(["instrucoes"]); const L=n=>X.utils.encode_col(n);
     for(const c of centros()){
-      const nomeC=c.id==="matriz"?"Matriz":c.nome;
+      const nomeC=c.nome;
       const A=[[C("Controle de Contas — importação de dados mensais",st.titulo),...Array(16).fill(C("",st.titulo))],
         [C("Centro de custo:",st.rot),null,C(nomeC,st.input),null,C("código interno:",st.cinzaPeq),C(c.id,st.cinzaPeq)],
         [C("Ano:",st.rot),null,C(String(ano),st.input),null,C("Preencha só as células amarelas, com o TOTAL do mês em reais (ex.: 12500,50). Despesas também em valor positivo.",st.dica)],
@@ -2883,7 +2908,7 @@ function lerPlanilha(wb){
       if(!cat){ if(!/^total|entradas|saidas|saídas/i.test(normTxt(String(nome||"")))) desconhecidas.push(String(nome||id)); continue; }
       for(const [m,v] of Object.entries(vals)) itens.push({cat,m:+m,v});
     }
-    const ach = centros().find(c=>c.id===centroCod) || centros().find(c=>normTxt(c.id==="matriz"?"Matriz":c.nome)===normTxt(centroNome)) || centros().find(c=>normTxt(c.id==="matriz"?"Matriz":c.nome)===normTxt(nomeAba));
+    const ach = centros().find(c=>c.id===centroCod) || centros().find(c=>normTxt(c.nome)===normTxt(centroNome)) || centros().find(c=>normTxt(c.nome)===normTxt(nomeAba));
     abas.push({nomeAba,centroNome,centro:ach?ach.id:"",ano:ano||new Date().getFullYear(),itens,desconhecidas,invalidos});
   }
   return abas;
@@ -2897,7 +2922,7 @@ function importarModal(){
     <div class="imp-passo"><b>1</b><div><div class="desc">Baixe o modelo — ele sai com o seu plano de contas atual (inclusive as categorias que você criou) e uma aba por loja</div>
       <div class="imp-linha"><label for="impAno" class="note">Ano</label><input id="impAno" type="number" min="2000" max="2100" value="${new Date().getFullYear()}" style="width:90px">
       <button type="button" class="btn" data-act="imp-modelo">${DL_ICON}Baixar modelo</button></div>
-      <p class="note" style="margin:4px 0 0">Uma aba por centro de custo (Matriz e cada loja). Preencha o total de cada categoria em cada mês. A taxa de cartão não entra: o sistema calcula sozinho.</p></div></div>
+      <p class="note" style="margin:4px 0 0">Uma aba por loja. Preencha o total de cada categoria em cada mês. A taxa de cartão não entra: o sistema calcula sozinho.</p></div></div>
     <div class="imp-passo"><b>2</b><div><div class="desc">Escolha a planilha preenchida</div>
       <input type="file" id="impArq" accept=".xlsx,.xls" style="margin-top:6px"></div></div>
     <div id="impPrev"></div>
@@ -2915,7 +2940,7 @@ function importarModal(){
 }
 function desenharPrevia(){
   const box=$("#impPrev"); if(!box||!IMP) return;
-  let total=0; const ops=c=>`${opt("","— não importar esta aba —",c)}${centros().map(x=>opt(x.id,x.id==="matriz"?"Matriz":x.nome,c)).join("")}`;
+  let total=0; const ops=c=>`${opt("","— não importar esta aba —",c)}${centros().map(x=>opt(x.id,x.nome,c)).join("")}`;
   box.innerHTML=`<div class="sect">Prévia — confira antes de importar</div>`+IMP.abas.map((a,i)=>{
     const ok=a.centro&&a.itens.length; if(ok) total+=a.itens.length;
     const ms=[...new Set(a.itens.map(x=>x.m))].sort((x,y)=>x-y);
@@ -2924,7 +2949,7 @@ function desenharPrevia(){
     return `<div class="imp-aba ${ok?"":"imp-off"}"><div class="imp-aba-h"><div><b>Aba “${esc(a.nomeAba)}”</b> <span class="note">· ano ${a.ano}${a.centroNome?` · na planilha: “${esc(a.centroNome)}”`:""}</span></div>
       <div class="field" style="min-width:230px"><label>Importar para</label><select data-ia="${i}">${ops(a.centro)}</select></div></div>
       ${a.itens.length?`<div class="tbl-wrap" style="border:0"><table><thead><tr><th>Mês</th><th class="r">Entradas</th><th class="r">Saídas</th><th class="r">Lançamentos</th></tr></thead><tbody>${ms.map(m=>`<tr><td>${MESES_L[m-1]}/${a.ano}</td><td class="r num tipo-r">${fmt(ent(m))}</td><td class="r num tipo-d">${fmt(sai(m))}</td><td class="r num">${a.itens.filter(x=>x.m===m).length}</td></tr>`).join("")}</tbody></table></div>`:'<p class="note">Nenhum valor preenchido nesta aba.</p>'}
-      ${!a.centro&&a.itens.length?'<div class="banner lib-banner" style="margin:6px 0 0">Escolha para qual loja (ou Matriz) vão os valores desta aba.</div>':""}
+      ${!a.centro&&a.itens.length?'<div class="banner lib-banner" style="margin:6px 0 0">Escolha para qual loja vão os valores desta aba.</div>':""}
       ${existentes?`<div class="banner info" style="margin:6px 0 0">Atenção: já existem ${existentes} lançamento(s) neste centro de custo nesses meses. Os valores importados serão <b>somados</b> a eles.</div>`:""}
       ${a.desconhecidas.length?`<div class="banner lib-banner" style="margin:6px 0 0">Linhas ignoradas (categoria não reconhecida): ${esc(a.desconhecidas.join(", "))}</div>`:""}
       ${a.invalidos.length?`<div class="banner lib-banner" style="margin:6px 0 0">Valores inválidos ignorados: ${esc(a.invalidos.slice(0,8).join(", "))}${a.invalidos.length>8?"…":""}</div>`:""}</div>`; }).join("");
@@ -2937,7 +2962,7 @@ async function executarImportacao(btn){
     for(const it of a.itens.sort((x,y)=>x.m-y.m)){ const dia=ultimoDia(a.ano,it.m), comp=`${a.ano}-${pad(it.m)}`;
       docs.push({id:novoId(),tid:S.tid,data:{tipo:it.cat.tipo==="receita"?"receita":"despesa",descricao:`${it.cat.nome.split(" — ")[0]} — ${MESES_L[it.m-1]}/${a.ano}`,valor:it.v,venc:dia,dataLanc:dia,competencia:comp,
         pago:comp<hojeMes?dia:null,categoria:it.cat.id,centro:a.centro,forma:"",fornecedorId:null,obs:`Importado da planilha ${IMP.arquivo}`,numero:numero++,parcela:"",criadoPor:S.me.id,criado:agora,importLote:lote,importado:true}}); n++; }
-    if(n) resumo.push(`${cenNome(a.centro)||"Matriz"}: ${n}`); }
+    if(n) resumo.push(`${cenNome(a.centro)||"—"}: ${n}`); }
   if(!docs.length) return;
   btn.disabled=true; let feitos=0;
   try{
@@ -3202,6 +3227,8 @@ document.addEventListener("click",async e=>{
   if(act==="imp-modelo"){ baixarModelo(a); return; }
   if(act==="imp-desfazer"){ confirmBtn(a,"Confirmar: apagar estes lançamentos",()=>desfazerImportacao(a.dataset.lote,a)); return; }
   if(act==="ir-taxas"){ ui.txMes=a.dataset.mes||mkey(HOJE); taxasRasc=null; ui.view="taxas"; render(); window.scrollTo(0,0); return; }
+  if(act==="mover-sem-loja"&&isAdm()){ confirmBtn(a,"Confirmar: mover todos",()=>moverSemLoja(a)); return; }
+  if(act==="ver-sem-loja"){ ui.view="lancamentos"; ui.l={tipo:"todos",mes:"",q:"",semLoja:true}; render(); return; }
   if(act==="dre-abrir"){ ui.dreAb=ui.dreAb||{}; if(ui.dreAb[id]) delete ui.dreAb[id]; else ui.dreAb[id]=true; render(); return; }
   if(act==="anl-modo"){ ui.anl=ui.anl||{}; ui.anl[a.dataset.k]=a.dataset.v; render(); return; }
   if(act==="ver-chamados"){ ui.view="chamados"; ui.chTab="chamados"; render(); return; }
