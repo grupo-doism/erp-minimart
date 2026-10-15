@@ -431,7 +431,7 @@ body.ro [data-act="new-lanc"],body.ro [data-act="new-forn"],body.ro [data-act="n
 .ch-fluxo{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 14px;font-size:12.5px;color:var(--ink-2)}
 .ch-fluxo span{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 10px}.ch-fluxo b{background:#000;color:var(--brand);border-radius:50%;display:inline-block;width:18px;height:18px;text-align:center;line-height:18px;font-size:11px;margin-right:4px}
 .ch-fluxo i{font-style:normal;color:var(--muted)}.ch-and{font-size:12.5px;max-width:300px}.ch-and div{margin-bottom:2px}
-table.taxas td{vertical-align:middle}.taxas input.tx-nome{min-width:200px}
+table.taxas td{vertical-align:middle}table.taxas td.meta{min-width:230px}.taxas input.tx-nome{min-width:200px}
 .tx-pct{display:flex;align-items:center;gap:6px}.tx-pct input{width:90px;text-align:right;font-weight:700}
 .anl-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}.anl-h h2{margin-bottom:8px}
 .anl-bars{display:flex;flex-direction:column;gap:6px;margin-top:6px}
@@ -453,6 +453,11 @@ table.dre tr.dre-det>td{padding:0 0 10px 26px;background:var(--surface-2)}
 .dre-lista{border-left:3px solid var(--brand);background:var(--surface);border-radius:0 10px 10px 0;padding:8px 10px;margin-top:2px;overflow-x:auto}
 .dre-lista-h{font-size:12.5px;margin-bottom:6px;color:var(--ink-2)}
 .dre-lista table{width:100%;font-size:12.5px}.dre-lista th{font-size:10.5px}.dre-lista td,.dre-lista th{padding:5px 8px}
+.esc-ops{display:flex;flex-direction:column;gap:8px}
+.esc-op{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+.esc-op:has(input:checked){border-color:var(--brand);background:var(--accent-soft)}
+.esc-op input{margin-top:3px;accent-color:var(--accent)}.esc-op small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.link-btn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -502,7 +507,7 @@ const GRUPOS = [
 ];
 const DEFAULT_CFG = {
   categorias:(()=>{ const L=(g,t,arr)=>arr.map(([id,nome,extra])=>({id,nome,tipo:t,grupo:g,fixa:true,...(extra||{})})); return [
-    ...L("receita","receita",[["rec_credito","Vendas por crédito"],["rec_debito","Vendas por débito"],["rec_pix","Vendas por Pix"],["rec_voucher1","Vendas por voucher 1"],["rec_voucher2","Vendas por voucher 2"],["rec_voucher3","Vendas por voucher 3"],["rec_voucher4","Vendas por voucher 4"],["rec_outras","Outras receitas"]]),
+    ...L("receita","receita",[["rec_credito","Vendas por crédito"],["rec_credito_antecip","Vendas por crédito com antecipação"],["rec_debito","Vendas por débito"],["rec_pix","Vendas por Pix"],["rec_voucher1","Vendas por voucher 1"],["rec_voucher2","Vendas por voucher 2"],["rec_voucher3","Vendas por voucher 3"],["rec_voucher4","Vendas por voucher 4"],["rec_outras","Outras receitas"]]),
     ...L("deducao","despesa",[["ded_impostos","Imposto sobre vendas"],["ded_taxas_cartao","Taxas de cartão (automático)",{auto:true}]]),
     ...L("cmv","despesa",[["cmv_merc","Compra de mercadorias"],["cmv_frete","Frete de mercadorias"],["cmv_perdas","Perdas e vencidos"]]),
     ...L("custop","despesa",[["cop_sistema","Mensalidade de sistema"],["cop_cashback","Cashback ao condomínio"],["cop_energia","Consumo de energia"],["cop_internet","Internet"],["cop_royalties","Royalties"],["cop_combustivel","Combustível"],["cop_monitoramento","Monitoramento"],["cop_sacolas","Sacolas e comunicação visual"]]),
@@ -518,7 +523,7 @@ const DEFAULT_CFG = {
 // categorias antigas (antes do plano novo) -> equivalente atual, para lançamentos já feitos não ficarem "sem categoria"
 const CAT_LEGADO={rec_produtos:"rec_outras",rec_online:"rec_outras",ded_taxas:"ded_impostos",cmv_emb:"cmv_merc",ven_mkt:"adm_marketing",ven_repasse:"cop_cashback",adm_utilid:"cop_energia",pes_salario:"pes_salario"};
 // venda por modalidade -> taxa cadastrada em "Minhas taxas"
-const VENDA_TAXA={rec_credito:"credito",rec_debito:"debito",rec_pix:"pix",rec_voucher1:"voucher1",rec_voucher2:"voucher2",rec_voucher3:"voucher3",rec_voucher4:"voucher4"};
+const VENDA_TAXA={rec_credito:"credito",rec_credito_antecip:"credito_antecip",rec_debito:"debito",rec_pix:"pix",rec_voucher1:"voucher1",rec_voucher2:"voucher2",rec_voucher3:"voucher3",rec_voucher4:"voucher4"};
 const FORMAS_PAG = ["Pix","Cartão","Boleto","Dinheiro","Transferência"];
 const MOTIVOS = [
   {id:"abastecimento",nome:"Abastecimento"},{id:"inventario",nome:"Inventário"},{id:"manutencao",nome:"Manutenção"},
@@ -616,8 +621,8 @@ const cfg = () => { if(_cfgK&&_cfgK[0]===S.cfg&&_cfgK[1]===S.planoRede) return _
   c.categorias=[...catsBase().map(x=>{ const m=/^rec_voucher(\d)$/.exec(x.id); const t=m&&tx.find(y=>y.id==="voucher"+m[1]); return {...x,base:true,...(t&&t.nome&&normTxt(t.nome)!==normTxt("voucher "+m[1])?{nome:x.nome+" — "+t.nome}:{})}; }),...catsExtra()]; _cfgV=c; _cfgK=[S.cfg,S.planoRede]; return c; };
 const matriz = () => (S.tenant&&S.tenant.matriz) || {};
 const catBy = id => cfg().categorias.find(c=>c.id===id) || (CAT_LEGADO[id]?cfg().categorias.find(c=>c.id===CAT_LEGADO[id]):undefined) || (id&&id.startsWith("_tx_")?txCatInfo(id):undefined);
-function taxaPct(modal){ const t=taxasAtuais().find(x=>x.id===modal); const v=t?parseFloat(String(t.pct??"").replace(",",".")):NaN; return isFinite(v)&&v>0?v:0; }
-function txCatInfo(id){ const modal=id.slice(4); const t=taxasAtuais().find(x=>x.id===modal); const pct=taxaPct(modal); return {id,nome:`Taxa de cartão — ${t?t.nome:modal}${pct?` (${pctTxt(pct)}%)`:""}`,grupo:"deducao",tipo:"despesa",auto:true}; }
+function taxaPct(modal,k){ const v=pctEm(modal,k||mkey(HOJE)); return isFinite(v)&&v>0?v:0; }
+function txCatInfo(id){ const modal=id.slice(4); const t=taxasAtuais().find(x=>x.id===modal); return {id,nome:`Taxa de cartão — ${t?t.nome:modal}`,grupo:"deducao",tipo:"despesa",auto:true}; }
 const fornBy = id => S.forn.find(f=>f.id===id);
 const lojaBy = id => S.lojas.find(l=>l.id===id);
 const lojaNome = x => x ? (x.condominio||x.nome||"Loja sem nome") : "";
@@ -800,7 +805,7 @@ function dreCalc(ini,fim,regime,cc){
     const bc=byCen[l.centro]?l.centro:""; if(v>0) byCen[bc].rec+=v; else byCen[bc].gas+=-v;
     // taxa de cartão automática: % cadastrada em "Minhas taxas" sobre cada venda da modalidade
     const modal = l.tipo==="receita" && VENDA_TAXA[l.categoria];
-    if(modal){ const pc=taxaPct(modal); if(pc){ const fee=-Math.round(l.valor*pc/100); const tid="_tx_"+modal;
+    if(modal){ const pc=taxaPct(modal,compOf(l)); if(pc){ const fee=-Math.round(l.valor*pc/100); const tid="_tx_"+modal;
       byCat[tid]=byCat[tid]||{g:"deducao",m:{},t:0,it:[]}; byCat[tid].m[k]=(byCat[tid].m[k]||0)+fee; byCat[tid].t+=fee; byCat[tid].it.push({l,k,v:fee,pc}); byCen[bc].gas+=-fee; } }
   }
   const gsum=(g,k)=>Object.values(byCat).filter(c=>c.g===g).reduce((a,c)=>a+(k?(c.m[k]||0):c.t),0);
@@ -2944,44 +2949,111 @@ async function desfazerImportacao(lote,btn){
     closeModal(); toast(`Importação desfeita — ${qtd} lançamento(s) removido(s)`); }
   catch(ex){ btn.disabled=false; toast("Não foi possível desfazer: "+(ex.message||"")); }
 }
-/* ---------- minhas taxas ---------- */
-const TAXAS_PADRAO=[{id:"credito",nome:"Crédito",tipo:"fixa"},{id:"debito",nome:"Débito",tipo:"fixa"},{id:"pix",nome:"Pix",tipo:"fixa"},{id:"voucher1",nome:"Voucher 1",tipo:"voucher"},{id:"voucher2",nome:"Voucher 2",tipo:"voucher"},{id:"voucher3",nome:"Voucher 3",tipo:"voucher"},{id:"voucher4",nome:"Voucher 4",tipo:"voucher"}];
-function taxasAtuais(){ const t=(S.cfg&&Array.isArray(S.cfg.taxas))?S.cfg.taxas:[]; const out=TAXAS_PADRAO.map(p=>({...p,...(t.find(x=>x.id===p.id)||{}),tipo:p.tipo})); t.filter(x=>!TAXAS_PADRAO.some(p=>p.id===x.id)).forEach(x=>out.push({...x,tipo:"extra"})); return out; }
+/* ---------- minhas taxas (com histórico por mês) ---------- */
+const TAXAS_PADRAO=[{id:"credito",nome:"Crédito",tipo:"fixa"},{id:"credito_antecip",nome:"Crédito com antecipação",tipo:"fixa"},{id:"debito",nome:"Débito",tipo:"fixa"},{id:"pix",nome:"Pix",tipo:"fixa"},{id:"voucher1",nome:"Voucher 1",tipo:"voucher"},{id:"voucher2",nome:"Voucher 2",tipo:"voucher"},{id:"voucher3",nome:"Voucher 3",tipo:"voucher"},{id:"voucher4",nome:"Voucher 4",tipo:"voucher"}];
+const numPct = v => { if(v==null||v==="") return null; const n=Number(String(v).trim().replace(/\s|%/g,"").replace(",",".")); return isFinite(n)?n:NaN; };
+// histórico: { credito:[{desde:"2026-10",pct:3.19}, ...], ... } — "0000-00" = vale para todos os meses anteriores
+let _hK=null,_hV=null;
+function histTaxas(){
+  if(_hK===S.cfg) return _hV;
+  const c=S.cfg||{}; const h=(c.taxasHist&&typeof c.taxasHist==="object")?c.taxasHist:{}; const base=Array.isArray(c.taxas)?c.taxas:[]; const out={};
+  const ids=new Set([...TAXAS_PADRAO.map(x=>x.id),...base.map(x=>x.id),...Object.keys(h)]);
+  ids.forEach(id=>{ let arr=Array.isArray(h[id])?h[id].map(e=>({desde:e.desde,pct:e.pct==null?null:+e.pct})):null;
+    if(!arr){ const b=base.find(x=>x.id===id); const v=b?numPct(b.pct):null; arr=(v!=null&&!isNaN(v))?[{desde:"0000-00",pct:v}]:[]; }
+    out[id]=arr.sort((a,b)=>a.desde.localeCompare(b.desde)); });
+  _hK=S.cfg; _hV=out; return out;
+}
+function pctNaLista(arr,k){ let v=null; for(const e of arr||[]){ if(e.desde<=k) v=e.pct; else break; } return v; }
+function pctEm(id,k){ return pctNaLista(histTaxas()[id],k); }
+function taxasAtuais(k){ k=k||mkey(HOJE); const t=(S.cfg&&Array.isArray(S.cfg.taxas))?S.cfg.taxas:[];
+  const out=TAXAS_PADRAO.map(p=>({...p,...(t.find(x=>x.id===p.id)||{}),tipo:p.tipo}));
+  t.filter(x=>!TAXAS_PADRAO.some(p=>p.id===x.id)).forEach(x=>out.push({...x,tipo:"extra"}));
+  return out.map(x=>({...x,pct:pctEm(x.id,k)})); }
 let taxasRasc=null;
 const pctTxt = v => (v==null||v==="")?"":String(v).replace(".",",");
+const mesTx = () => ui.txMes || mkey(HOJE);
+function desdeTxt(id,k){ const arr=histTaxas()[id]||[]; let e=null; for(const x of arr){ if(x.desde<=k) e=x; else break; } const prox=arr.find(x=>x.desde>k);
+  return `${e?(e.desde==="0000-00"?"vale para todos os meses anteriores":`vale desde ${mlabel(e.desde)}`):"sem taxa cadastrada neste mês"}${prox?` · muda em ${mlabel(prox.desde)}`:""}${arr.length>1?` · <button type="button" class="link-btn" data-act="tx-hist" data-id="${esc(id)}">histórico (${arr.length})</button>`:""}`; }
 function vTaxas(){
-  const ed=isAdm(); const ls=taxasRasc||taxasAtuais();
-  const linha=(t,i)=>{ const pct=parseFloat(String(t.pct??"").replace(",",".")); const rec=isFinite(pct)?100*(1-pct/100):null; return `<tr data-ti="${i}">
+  const ed=isAdm(); const k=mesTx(); const ls=taxasRasc||taxasAtuais(k);
+  const linha=(t,i)=>`<tr data-ti="${i}">
     <td>${t.tipo==="fixa"?`<b>${esc(t.nome)}</b>`:`<input type="text" class="tx-nome" data-ti="${i}" value="${esc(t.nome)}" ${ed?"":"disabled"} placeholder="${t.tipo==="voucher"?"Ex.: Alelo, Ticket, VR, Sodexo":"Nome da forma de venda"}" aria-label="Nome da forma de venda">`}
       ${t.tipo==="voucher"?'<div class="meta">voucher — pode renomear</div>':t.tipo==="extra"?'<div class="meta">taxa adicionada por você</div>':""}</td>
     <td><div class="tx-pct"><input type="text" inputmode="decimal" class="tx-pct-in" data-ti="${i}" value="${esc(pctTxt(t.pct))}" ${ed?"":"disabled"} placeholder="0,00" aria-label="Taxa de ${esc(t.nome)} em %"><span>%</span></div></td>
-    <td class="r">${ed&&t.tipo==="extra"?`<button class="icon-btn" data-act="tx-del" data-i="${i}">Excluir</button>`:""}</td></tr>`; };
-  return header("Minhas taxas","Porcentagem cobrada pela maquininha ou pela operadora em cada forma de venda. O sistema calcula sozinho a taxa sobre as vendas de cada modalidade e lança como despesa (dedução) no DRE.",ed?`<button class="btn" data-act="tx-nova">+ Nova taxa de venda</button><button class="btn pri" data-act="tx-salvar">Salvar taxas</button>`:"")
+    <td class="meta">${t.novo?"nova":desdeTxt(t.id,k)}</td>
+    <td class="r">${ed&&t.tipo==="extra"?`<button class="icon-btn" data-act="tx-del" data-i="${i}">Excluir</button>`:""}</td></tr>`;
+  return header("Minhas taxas","Porcentagem cobrada pela maquininha ou pela operadora em cada forma de venda. O sistema calcula a taxa sobre as vendas de cada modalidade, com a taxa que valia no mês da venda, e lança como despesa (dedução) no DRE.",ed?`<button class="btn" data-act="tx-nova">+ Nova taxa de venda</button><button class="btn pri" data-act="tx-salvar">Salvar taxas</button>`:"")
    + banners()
-   + `<div class="grid g2e"><div class="tbl-wrap"><table class="taxas"><thead><tr><th>Forma de venda</th><th style="width:150px">Taxa</th><th></th></tr></thead><tbody>${ls.map(linha).join("")}</tbody></table></div>
+   + `<div class="toolbar"><div class="field"><label for="txMes">Mês de referência</label><input type="month" id="txMes" value="${esc(k)}"></div>
+       <span class="note">Mostra as taxas que valiam no mês escolhido. Ao salvar uma mudança, você escolhe se ela vale só para este mês, deste mês em diante ou para todos os meses.</span></div>
+     <div class="grid g2e"><div class="tbl-wrap"><table class="taxas"><thead><tr><th>Forma de venda</th><th style="width:150px">Taxa em ${esc(mlabel(k))}</th><th>Vigência</th><th></th></tr></thead><tbody>${ls.map(linha).join("")}</tbody></table></div>
      <div class="panel" style="align-self:start"><h2>Como preencher</h2><ol class="steps">
+       <li>Escolha o <b>mês de referência</b> (o mês em que a taxa mudou).</li>
        <li>Informe a taxa em porcentagem, com vírgula. Ex.: <b>3,19</b> para 3,19%.</li>
-       <li>Nos <b>vouchers</b>, troque o nome pelo da operadora que você aceita (Alelo, Ticket, VR, Sodexo…).</li>
-       <li>Use <b>+ Nova taxa de venda</b> para outras formas (ex.: crédito parcelado, link de pagamento, iFood).</li>
-       <li>Clique em <b>Salvar taxas</b>.</li></ol>
+       <li>Nos <b>vouchers</b>, troque o nome pelo da operadora (Alelo, Ticket, VR, Sodexo…).</li>
+       <li>Clique em <b>Salvar taxas</b> e escolha até onde a mudança vale. Meses já fechados não mudam, a menos que você escolha "todos os meses".</li></ol>
        ${taxasRasc?'<div class="banner info" style="margin:10px 0 0">Há alterações não salvas.</div>':""}</div></div>`;
 }
-function lerTaxasTela(){ const ls=(taxasRasc||taxasAtuais()).map(x=>({...x}));
+function lerTaxasTela(){ const ls=(taxasRasc||taxasAtuais(mesTx())).map(x=>({...x}));
   document.querySelectorAll(".tx-nome").forEach(el=>{ const t=ls[+el.dataset.ti]; if(t) t.nome=el.value; });
   document.querySelectorAll(".tx-pct-in").forEach(el=>{ const t=ls[+el.dataset.ti]; if(t) t.pct=el.value.trim(); });
   return ls; }
+function escopoNaLista(arr,k,pct,escopo){
+  arr=(arr||[]).map(e=>({...e}));
+  if(escopo==="todos") return pct==null?[]:[{desde:"0000-00",pct}];
+  if(escopo==="adiante"){ const a=arr.filter(e=>e.desde<k); a.push({desde:k,pct}); return limparHist(a); }
+  const prox=addMonths(k,1); const vProx=pctNaLista(arr,prox); const temProx=arr.some(e=>e.desde===prox);
+  const a=arr.filter(e=>e.desde!==k); a.push({desde:k,pct}); if(!temProx) a.push({desde:prox,pct:vProx}); return limparHist(a);
+}
+function limparHist(a){ a.sort((x,y)=>x.desde.localeCompare(y.desde)); const out=[]; for(const e of a){ const ant=out[out.length-1]; if(ant&&ant.pct===e.pct) continue; if(!ant&&e.pct==null) continue; out.push(e); } return out; }
 async function salvarTaxas(btn){
-  const ls=lerTaxasTela(); const out=[];
+  const k=mesTx(); const ls=lerTaxasTela(); const antes=taxasAtuais(k); const lista=[];
   for(const t of ls){
     const nome=String(t.nome||"").trim(); if(!nome){ toast("Dê um nome para todas as formas de venda."); return; }
-    let pct=String(t.pct??"").trim().replace(/\s|%/g,"").replace(",","."); pct = pct===""?null:Number(pct);
-    if(pct!==null&&(!isFinite(pct)||pct<0||pct>100)){ toast(`Taxa inválida em "${nome}". Use um número entre 0 e 100, ex.: 3,19`); return; }
-    out.push({id:t.id,nome,pct,tipo:t.tipo});
+    const pct=numPct(t.pct); if(pct!==null&&(isNaN(pct)||pct<0||pct>100)){ toast(`Taxa inválida em "${nome}". Use um número entre 0 e 100, ex.: 3,19`); return; }
+    lista.push({id:t.id,nome,pct,tipo:t.tipo});
   }
-  const nomes=out.map(x=>normTxt(x.nome)); if(new Set(nomes).size!==nomes.length){ toast("Há duas formas de venda com o mesmo nome."); return; }
-  if(btn) btn.disabled=true;
-  try{ const c={...(S.cfg||{})}; delete c.categorias; c.taxas=out.map(({id,nome,pct})=>({id,nome,pct})); c.taxasAtualizadas=new Date().toISOString(); await saveCfg(c); taxasRasc=null; toast("Taxas salvas"); render(); }
-  catch(ex){ if(btn) btn.disabled=false; }
+  const nomes=lista.map(x=>normTxt(x.nome)); if(new Set(nomes).size!==nomes.length){ toast("Há duas formas de venda com o mesmo nome."); return; }
+  const mudPct=lista.filter(x=>{ const a=antes.find(y=>y.id===x.id); return (a?a.pct:null)!==x.pct; });
+  const mudNome=lista.filter(x=>{ const a=antes.find(y=>y.id===x.id); return a&&a.nome!==x.nome; });
+  const novas=lista.filter(x=>!antes.some(y=>y.id===x.id)), removidas=antes.filter(y=>y.tipo==="extra"&&!lista.some(x=>x.id===y.id));
+  if(!mudPct.length&&!mudNome.length&&!novas.length&&!removidas.length){ toast("Nenhuma alteração para salvar."); return; }
+  const fmtP=v=>v==null?"sem taxa":pctTxt(v)+"%";
+  const itens=[...mudPct.map(x=>{ const a=antes.find(y=>y.id===x.id); return `<li><b>${esc(x.nome)}</b>: ${fmtP(a?a.pct:null)} → <b>${fmtP(x.pct)}</b></li>`; }),
+    ...mudNome.filter(x=>!mudPct.includes(x)).map(x=>`<li>Nome: “${esc(antes.find(y=>y.id===x.id).nome)}” → <b>“${esc(x.nome)}”</b></li>`),
+    ...novas.filter(x=>!mudPct.includes(x)).map(x=>`<li>Nova forma de venda: <b>${esc(x.nome)}</b></li>`),
+    ...removidas.map(x=>`<li>Excluir: <b>${esc(x.nome)}</b></li>`)];
+  const M=mlabel(k), Mp=MESES_L[+k.slice(5)-1]+"/"+k.slice(0,4);
+  openModal(`<h2>Confirmar alteração das taxas</h2>
+    <div class="rec-info"><b>O que muda (mês de referência: ${esc(Mp)})</b><ul style="margin:6px 0 0 18px;padding:0">${itens.join("")}</ul></div>
+    ${mudPct.length?`<div class="sect">Até onde vale a mudança de taxa?</div>
+    <div class="esc-ops">
+      <label class="esc-op"><input type="radio" name="txEsc" value="so"><span><b>Somente ${esc(Mp)}</b><small>Os outros meses continuam com a taxa anterior.</small></span></label>
+      <label class="esc-op"><input type="radio" name="txEsc" value="adiante" checked><span><b>De ${esc(Mp)} em diante</b><small>Os meses anteriores ficam como estão; ${esc(M)} e os próximos usam a nova taxa.</small></span></label>
+      <label class="esc-op"><input type="radio" name="txEsc" value="todos"><span><b>Todos os meses, inclusive os anteriores</b><small>Recalcula o DRE de todos os meses com a nova taxa.</small></span></label>
+    </div>`:'<p class="note">Nomes valem para todos os meses. As taxas não mudam.</p>'}
+    <div class="foot"><div></div><div><button type="button" class="btn" data-close>Cancelar</button><button type="button" class="btn pri" id="txConf">Confirmar alteração</button></div></div>`,false,()=>{
+    $("#txConf").addEventListener("click",async e=>{ const b=e.currentTarget; const r=document.querySelector('input[name="txEsc"]:checked'); const escopo=r?r.value:"adiante";
+      b.disabled=true;
+      try{
+        const hist=JSON.parse(JSON.stringify(histTaxas()));
+        mudPct.forEach(x=>{ hist[x.id]=escopoNaLista(hist[x.id],k,x.pct,escopo); });
+        removidas.forEach(x=>{ delete hist[x.id]; });
+        const c={...(S.cfg||{})}; delete c.categorias;
+        c.taxasHist=hist;
+        c.taxas=lista.map(({id,nome})=>({id,nome,pct:pctNaLista(hist[id],mkey(HOJE))}));
+        c.taxasAtualizadas=new Date().toISOString();
+        await saveCfg(c);
+        if(mudPct.length) diario("Taxas alteradas",mudPct.map(x=>{ const a=antes.find(y=>y.id===x.id); return `${x.nome}: ${fmtP(a?a.pct:null)} → ${fmtP(x.pct)}`; }).join(" · ")+` — ${escopo==="so"?"somente "+Mp:escopo==="adiante"?"de "+Mp+" em diante":"todos os meses"}`,{cat:"alteracao"});
+        taxasRasc=null; closeModal(); toast("Taxas salvas"); render();
+      }catch(ex){ b.disabled=false; toast("Não foi possível salvar: "+(ex.message||"")); }
+    }); },"all");
+}
+function histModal(id){
+  const t=taxasAtuais().find(x=>x.id===id); const arr=histTaxas()[id]||[];
+  openModal(`<h2>Histórico — ${esc(t?t.nome:id)}</h2><div class="tbl-wrap"><table><thead><tr><th>Vale a partir de</th><th class="r">Taxa</th></tr></thead><tbody>
+    ${arr.map(e=>`<tr><td>${e.desde==="0000-00"?"todos os meses anteriores":esc(MESES_L[+e.desde.slice(5)-1]+"/"+e.desde.slice(0,4))}</td><td class="r num">${e.pct==null?"sem taxa":pctTxt(e.pct)+"%"}</td></tr>`).join("")}</tbody></table></div>
+    <div class="foot"><div></div><div><button type="button" class="btn" data-close>Fechar</button></div></div>`,false,null,"all");
 }
 /* ---------- usuários do franqueado ---------- */
 const NIV_TXT=["Não acessa","Só leitura","Pode editar"];
@@ -3111,7 +3183,8 @@ document.addEventListener("click",async e=>{
   if(act==="rede-senha"&&masterRede()){ confirmBtn(a,"Confirmar",async()=>{ try{ const r=await chamar("novaSenhaTemp",{uid:id}); credenciais("Nova senha temporária",r); }catch(ex){ toast(ex.message); } }); return; }
   if(act==="rede-ativo"&&masterRede()){ confirmBtn(a,"Confirmar",async()=>{ try{ await chamar("alterarContaRede",{uid:id,ativo:a.dataset.v==="1"}); toast("Acesso atualizado"); }catch(ex){ toast(ex.message); } }); return; }
   if(act==="novo-chamado"&&masterRede()){ novoChamadoModal(); return; }
-  if(act==="tx-nova"&&isAdm()){ taxasRasc=lerTaxasTela(); taxasRasc.push({id:"tx_"+rid(),nome:"",pct:"",tipo:"extra"}); render(); setTimeout(()=>{ const ns=document.querySelectorAll(".tx-nome"); if(ns.length) ns[ns.length-1].focus(); },30); return; }
+  if(act==="tx-hist"){ histModal(id); return; }
+  if(act==="tx-nova"&&isAdm()){ taxasRasc=lerTaxasTela(); taxasRasc.push({id:"tx_"+rid(),nome:"",pct:"",tipo:"extra",novo:true}); render(); setTimeout(()=>{ const ns=document.querySelectorAll(".tx-nome"); if(ns.length) ns[ns.length-1].focus(); },30); return; }
   if(act==="tx-del"&&isAdm()){ taxasRasc=lerTaxasTela(); taxasRasc.splice(+a.dataset.i,1); render(); return; }
   if(act==="tx-salvar"&&isAdm()){ salvarTaxas(a); return; }
   if(act==="imp-abrir"&&isAdm()){ importarModal(); return; }
@@ -3175,6 +3248,7 @@ document.addEventListener("input",e=>{
 document.addEventListener("change",e=>{
   const t=e.target;
   if(t.id==="tenSel"){ abrirTenant(t.value); return; }
+  if(t.id==="txMes"){ if(taxasRasc&&!confirm("Há alterações não salvas nas taxas. Trocar de mês e descartar?")){ t.value=mesTx(); return; } taxasRasc=null; ui.txMes=t.value||mkey(HOJE); render(); return; }
   if(t.id==="rrSel"){ ui.rreg=t.value; render(); return; }
   if(t.id==="dgCat"){ ui.dg=ui.dg||{}; ui.dg.cat=t.value; render(); return; }
   if(t.dataset&&t.dataset.vlanc){ if(S.role==="ro"){ toast("Somente leitura."); render(); return; } const l=S.lanc.find(x=>x.id===t.dataset.vlanc); const v=parseMoney(t.value); if(!l||!t.value.trim()) return; if(!(v>0)){ toast("Valor inválido — use números, ex.: 1.250,00"); return; } save("lanc",l.id,{...l,valor:v,valorPendente:false,atualizado:new Date().toISOString()}).then(()=>toast(`Valor de ${mlabel(compOf(l))} salvo: ${fmt(v)}`)).catch(()=>{}); return; }
