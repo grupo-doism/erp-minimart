@@ -790,7 +790,7 @@ function fluxoMeses(ini,n,cc){
 }
 function dreCalc(ini,fim,regime,cc){
   const meses=[]; for(let k=ini;k<=fim;k=addMonths(k,1)){ meses.push(k); if(meses.length>24) break; }
-  const byCat={};
+  const byCat={}; const semTaxa={};
   const byCen={}; centros().forEach(c=>byCen[c.id]={rec:0,gas:0}); byCen[""]={rec:0,gas:0};
   for(const l of S.lanc){
     if(!inCC(l,cc)) continue;
@@ -805,6 +805,7 @@ function dreCalc(ini,fim,regime,cc){
     const bc=byCen[l.centro]?l.centro:""; if(v>0) byCen[bc].rec+=v; else byCen[bc].gas+=-v;
     // taxa de cartão automática: % cadastrada em "Minhas taxas" sobre cada venda da modalidade
     const modal = l.tipo==="receita" && VENDA_TAXA[l.categoria];
+    if(modal&&pctEm(modal,compOf(l))==null){ (semTaxa[modal]=semTaxa[modal]||new Set()).add(compOf(l)); }
     if(modal){ const pc=taxaPct(modal,compOf(l)); if(pc){ const fee=-Math.round(l.valor*pc/100); const tid="_tx_"+modal;
       byCat[tid]=byCat[tid]||{g:"deducao",m:{},t:0,it:[]}; byCat[tid].m[k]=(byCat[tid].m[k]||0)+fee; byCat[tid].t+=fee; byCat[tid].it.push({l,k,v:fee,pc}); byCen[bc].gas+=-fee; } }
   }
@@ -812,7 +813,7 @@ function dreCalc(ini,fim,regime,cc){
   const calc=k=>{ const r={}; ["receita","deducao","cmv","custop","despop","adm","pessoal","financeiro"].forEach(g=>r[g]=gsum(g,k));
     r.venda=r.despop; r.RL=r.receita+r.deducao; r.LB=r.RL+r.cmv; r.RO=r.LB+r.custop+r.despop+r.adm+r.pessoal; r.RLIQ=r.RO+r.financeiro; return r; };
   const tot=calc(null); const pm={}; meses.forEach(k=>pm[k]=calc(k));
-  return {meses,byCat,tot,pm,byCen};
+  return {semTaxa,meses,byCat,tot,pm,byCen};
 }
 const DRE_LINHAS = [
   ["grp","receita","Receita bruta"],["grp","deducao","(−) Deduções (impostos e taxas de cartão)"],["sub","RL","= Receita líquida"],
@@ -1085,6 +1086,9 @@ function vDre(){
         <div class="field"><label for="fdFim">Até</label><input type="month" id="fdFim" value="${esc(ui.d.fim)}"></div>
         <div class="field"><span class="flabel">Regime</span><div class="seg"><button data-f="d.regime" data-v="competencia" aria-pressed="${ui.d.regime==="competencia"}">Competência</button><button data-f="d.regime" data-v="caixa" aria-pressed="${ui.d.regime==="caixa"}">Caixa</button></div></div>
       </div>
+      ${(()=>{ const ks=Object.keys(d.semTaxa||{}); if(!ks.length) return ""; const nomeT=id=>{ const t=taxasAtuais().find(x=>x.id===id); return t?t.nome:id; };
+        const faixa=set=>{ const a=[...set].sort(); return a.length===1?mlabel(a[0]):`${mlabel(a[0])} a ${mlabel(a[a.length-1])}`; };
+        return `<div class="banner lib-banner tx-falta"><b>Taxa de cartão não descontada:</b> há vendas sem taxa cadastrada para o mês da venda — ${ks.map(k=>`<b>${esc(nomeT(k))}</b> (${esc(faixa(d.semTaxa[k]))})`).join(", ")}. Se a modalidade não tem tarifa, cadastre 0. ${isAdm()||nivel("config")>=2?`<button class="btn sm pri" data-act="ir-taxas" data-mes="${esc([...d.semTaxa[ks[0]]].sort()[0])}">Cadastrar em Minhas taxas</button>`:"Peça ao master do franqueado para cadastrar em Minhas taxas."}</div>`; })()}
       <div class="tbl-wrap" style="margin-bottom:16px"><table class="dre">
         <thead><tr><th>Conta</th>${ms.map(k=>`<th class="r">${mlabel(k)}</th>`).join("")}<th class="r">Total</th><th class="r">% RL</th></tr></thead>
         <tbody>${body}</tbody></table></div>
@@ -1435,11 +1439,12 @@ const FF=["Emp","Doc","Resp","Tel","Email","Forn","Obs"];
 function fornFieldsRead(px){ return {empresa:$("#"+px+"Emp").value.trim(), documento:fmtDoc($("#"+px+"Doc").value.trim()), responsavel:$("#"+px+"Resp").value.trim(), telefone:$("#"+px+"Tel").value.trim(), email:$("#"+px+"Email").value.trim(), fornece:$("#"+px+"Forn").value.trim(), obs:$("#"+px+"Obs").value.trim()}; }
 function fornValidate(px,err){
   const d=fornFieldsRead(px);
-  if(!d.empresa){ err.textContent="Informe a empresa do fornecedor."; $("#"+px+"Emp").focus(); return false; }
-  if(!docOk(d.documento)){ err.textContent="CPF do fornecedor deve ter 11 dígitos e CNPJ 14 dígitos."; $("#"+px+"Doc").focus(); return false; }
+  if(!d.empresa){ err.textContent="Informe o nome da empresa ou pessoa (ou deixe todos os campos do fornecedor em branco)."; $("#"+px+"Emp").focus(); return false; }
+  if(d.documento&&!docOk(d.documento)){ err.textContent="CPF deve ter 11 dígitos e CNPJ 14 dígitos (ou deixe em branco)."; $("#"+px+"Doc").focus(); return false; }
   if(d.email&&!/^\S+@\S+\.\S+$/.test(d.email)){ err.textContent="E-mail do fornecedor inválido."; $("#"+px+"Email").focus(); return false; }
   return true;
 }
+const fornPorNome=(nome,exceto)=>{ const n=normTxt(String(nome||"").trim()); return n ? S.forn.find(x=>x.id!==exceto&&normTxt(fornNome(x).trim())===n) : null; };
 const fornPorDoc=(doc,exceto)=>{ const d=digitos(doc); return d.length>=11 ? S.forn.find(x=>x.id!==exceto&&digitos(x.documento)===d) : null; };
 async function criarForn(dados){
   const id=newId("forn"); const codigo=proxCodigo(S.forn,"F");
@@ -1534,7 +1539,7 @@ function lancForm(l,tipoDefault){
         const f=fornBy(hid.value);
         if(f){ $("#lfHint").innerHTML=`Código <b class="num">${esc(f.codigo||"—")}</b> · fornecedor já cadastrado`; $("#lfSt").innerHTML='<span class="pill st-pago">Cadastrado</span>'; return; }
         if(emp.value.trim()||doc.value.trim()){ $("#lfHint").innerHTML=`Novo fornecedor — será cadastrado com o código <b class="num">${proxCodigo(S.forn,"F")}</b> ao salvar o lançamento.`; $("#lfSt").innerHTML='<span class="pill st-info">Novo</span>'; return; }
-        $("#lfHint").textContent=`Digite o nome, código ou CPF/CNPJ. Se ainda não existir, o cadastro é criado ao salvar. ${T()==="despesa"?"Obrigatório para despesas.":"Opcional para receitas."}`; $("#lfSt").innerHTML="";
+        $("#lfHint").textContent=`Digite o nome, código ou CPF/CNPJ. Se ainda não existir, o cadastro é criado ao salvar. Opcional — pode deixar em branco.`; $("#lfSt").innerHTML="";
       };
       const lock=f=>{ hid.value=f.id; emp.value=fornNome(f); doc.value=fmtDoc(f.documento); $("#lfResp").value=fornResp(f); $("#lfTel").value=f.telefone||""; $("#lfEmail").value=f.email||""; $("#lfForn").value=f.fornece||""; $("#lfObs").value=f.obs||""; campos.forEach(c=>c.readOnly=true); troca.hidden=false; fechar(); updHint(); };
       const unlock=()=>{ hid.value=""; campos.forEach(c=>{ c.readOnly=false; c.value=""; }); troca.hidden=true; updHint(); emp.focus(); };
@@ -1595,8 +1600,7 @@ function lancForm(l,tipoDefault){
         if(!desc) return fail("Informe o assunto do lançamento.",$("#lDesc"));
         let fid=hid.value||null, novoForn=false;
         const algumForn=campos.some(c=>c.value.trim());
-        if(!fid&&algumForn){ if(!fornValidate("lf",err)) return; const dup=fornPorDoc(doc.value); if(dup) fid=dup.id; else novoForn=true; }
-        if(!fid&&!novoForn&&tipo==="despesa") return fail("Informe o fornecedor da despesa (empresa e CPF/CNPJ).",emp);
+        if(!fid&&algumForn){ if(!fornValidate("lf",err)) return; const dup=fornPorDoc(doc.value)||(!digitos(doc.value)?fornPorNome(emp.value):null); if(dup) fid=dup.id; else novoForn=true; }
         if(!$("#lCat").value) return fail("Escolha a categoria — ela define onde o valor entra no DRE.",$("#lCat"));
         if(!$("#lCen").value) return fail("Escolha o centro de custo (Matriz ou uma loja).",$("#lCen"));
         if(!dataLanc) return fail("Informe a data do lançamento.",$("#lData"));
@@ -1675,7 +1679,7 @@ function fornForm(f){
     <div class="cod-line">Código <b class="num">${esc(isNew?proxCodigo(S.forn,"F"):(f.codigo||"a gerar"))}</b>${isNew?" · gerado automaticamente ao salvar":""}</div>
     <form id="fFo" novalidate class="fcol">
       ${fornFieldsHTML("fo",f,false)}
-      <p class="note" style="margin:0">Empresa e CPF/CNPJ são obrigatórios.${lancs.length?` · ${lancs.length} lançamento(s) com este fornecedor.`:""}</p>
+      <p class="note" style="margin:0">Só o nome é obrigatório; CPF/CNPJ é opcional.${lancs.length?` · ${lancs.length} lançamento(s) com este fornecedor.`:""}</p>
       <div class="err" id="foErr" role="alert"></div>
       <div class="foot"><div>${!isNew&&isAdm()?`<button type="button" class="btn danger" id="foDel">Excluir</button>`:""}</div>
         <div><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn pri">${isNew?"Salvar fornecedor":"Salvar alterações"}</button></div></div>
@@ -3024,13 +3028,15 @@ async function salvarTaxas(btn){
     ...novas.filter(x=>!mudPct.includes(x)).map(x=>`<li>Nova forma de venda: <b>${esc(x.nome)}</b></li>`),
     ...removidas.map(x=>`<li>Excluir: <b>${esc(x.nome)}</b></li>`)];
   const M=mlabel(k), Mp=MESES_L[+k.slice(5)-1]+"/"+k.slice(0,4);
+  const primeiro = mudPct.length && mudPct.every(x=>{ const arr=histTaxas()[x.id]||[]; return !arr.some(e=>e.pct!=null); });
   openModal(`<h2>Confirmar alteração das taxas</h2>
     <div class="rec-info"><b>O que muda (mês de referência: ${esc(Mp)})</b><ul style="margin:6px 0 0 18px;padding:0">${itens.join("")}</ul></div>
     ${mudPct.length?`<div class="sect">Até onde vale a mudança de taxa?</div>
     <div class="esc-ops">
       <label class="esc-op"><input type="radio" name="txEsc" value="so"><span><b>Somente ${esc(Mp)}</b><small>Os outros meses continuam com a taxa anterior.</small></span></label>
-      <label class="esc-op"><input type="radio" name="txEsc" value="adiante" checked><span><b>De ${esc(Mp)} em diante</b><small>Os meses anteriores ficam como estão; ${esc(M)} e os próximos usam a nova taxa.</small></span></label>
-      <label class="esc-op"><input type="radio" name="txEsc" value="todos"><span><b>Todos os meses, inclusive os anteriores</b><small>Recalcula o DRE de todos os meses com a nova taxa.</small></span></label>
+      ${primeiro?`<div class="banner info" style="margin:0">Primeiro cadastro desta taxa: por isso a opção <b>“Todos os meses”</b> já vem marcada, para descontar também nas vendas dos meses anteriores.</div>`:""}
+      <label class="esc-op"><input type="radio" name="txEsc" value="adiante" ${primeiro?"":"checked"}><span><b>De ${esc(Mp)} em diante</b><small>Os meses anteriores ficam como estão; ${esc(M)} e os próximos usam a nova taxa.</small></span></label>
+      <label class="esc-op"><input type="radio" name="txEsc" value="todos" ${primeiro?"checked":""}><span><b>Todos os meses, inclusive os anteriores</b><small>Recalcula o DRE de todos os meses com a nova taxa.</small></span></label>
     </div>`:'<p class="note">Nomes valem para todos os meses. As taxas não mudam.</p>'}
     <div class="foot"><div></div><div><button type="button" class="btn" data-close>Cancelar</button><button type="button" class="btn pri" id="txConf">Confirmar alteração</button></div></div>`,false,()=>{
     $("#txConf").addEventListener("click",async e=>{ const b=e.currentTarget; const r=document.querySelector('input[name="txEsc"]:checked'); const escopo=r?r.value:"adiante";
@@ -3190,6 +3196,7 @@ document.addEventListener("click",async e=>{
   if(act==="imp-abrir"&&isAdm()){ importarModal(); return; }
   if(act==="imp-modelo"){ baixarModelo(a); return; }
   if(act==="imp-desfazer"){ confirmBtn(a,"Confirmar: apagar estes lançamentos",()=>desfazerImportacao(a.dataset.lote,a)); return; }
+  if(act==="ir-taxas"){ ui.txMes=a.dataset.mes||mkey(HOJE); taxasRasc=null; ui.view="taxas"; render(); window.scrollTo(0,0); return; }
   if(act==="dre-abrir"){ ui.dreAb=ui.dreAb||{}; if(ui.dreAb[id]) delete ui.dreAb[id]; else ui.dreAb[id]=true; render(); return; }
   if(act==="anl-modo"){ ui.anl=ui.anl||{}; ui.anl[a.dataset.k]=a.dataset.v; render(); return; }
   if(act==="ver-chamados"){ ui.view="chamados"; ui.chTab="chamados"; render(); return; }
