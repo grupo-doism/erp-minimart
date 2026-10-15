@@ -460,6 +460,8 @@ table.dre tr.dre-det>td{padding:0 0 10px 26px;background:var(--surface-2)}
 .link-btn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit}
 .pill-btn{background:none;border:0;padding:0;cursor:pointer;font:inherit}.pill-btn:hover .pill{outline:2px solid var(--brand);outline-offset:1px}
 .pill-btn[data-armed]{background:var(--neg);color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600}
+table.dre tr.dre-grp{cursor:pointer}table.dre tr.dre-grp:hover td{background:var(--accent-soft)}
+.dre-seta-g{display:inline-block;width:14px;color:var(--accent);transition:transform .15s}tr.dre-grp.fechado .dre-seta-g{transform:rotate(-90deg)}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -1077,9 +1079,13 @@ function vDre(){
   const d=dreCalc(ui.d.ini,ui.d.fim,ui.d.regime,ui.cc);
   const ms=d.meses; const RL=d.tot.RL;
   const cell=v=>`<td class="r num ${v<0?'neg':''}">${v?fmt(v):"—"}</td>`;
+  ui.dreFech=ui.dreFech||{};
   const body=DRE_LINHAS.map(([cls,key,label])=>{
-    let h=`<tr class="${cls}"><td>${label}</td>${ms.map(k=>cell(d.pm[k][key])).join("")}${cell(d.tot[key])}<td class="r pct num">${pct(d.tot[key],RL)}</td></tr>`;
-    if(cls==="grp") h+=dreCats(d,key).map(([id,c])=>{ const ab=!!(ui.dreAb&&ui.dreAb[id]);
+    const cats=cls==="grp"?dreCats(d,key):[]; const fech=cls==="grp"&&!!ui.dreFech[key];
+    let h = cls==="grp"&&cats.length
+      ? `<tr class="${cls} dre-grp ${fech?"fechado":""}" data-act="dre-grp" data-g="${key}" title="${fech?"Mostrar":"Recolher"} as categorias" tabindex="0" role="button" aria-expanded="${!fech}"><td><span class="dre-seta-g" aria-hidden="true">▾</span>${label}${fech?` <span class="dre-qtd">${cats.length}</span>`:""}</td>${ms.map(k=>cell(d.pm[k][key])).join("")}${cell(d.tot[key])}<td class="r pct num">${pct(d.tot[key],RL)}</td></tr>`
+      : `<tr class="${cls}"><td>${label}</td>${ms.map(k=>cell(d.pm[k][key])).join("")}${cell(d.tot[key])}<td class="r pct num">${pct(d.tot[key],RL)}</td></tr>`;
+    if(cls==="grp"&&!fech) h+=cats.map(([id,c])=>{ const ab=!!(ui.dreAb&&ui.dreAb[id]);
       return `<tr class="cat dre-clk ${ab?"aberto":""}" data-act="dre-abrir" data-id="${esc(id)}" title="Clique para ver os lançamentos" tabindex="0" role="button" aria-expanded="${ab}"><td><span class="dre-seta" aria-hidden="true">▸</span>${esc(catBy(id)?.nome||"Sem categoria")} <span class="dre-qtd">${c.it.length}</span></td>${ms.map(k=>cell(c.m[k]||0)).join("")}${cell(c.t)}<td class="r pct num">${pct(c.t,RL)}</td></tr>`
         + (ab?`<tr class="dre-det"><td colspan="${ms.length+3}">${dreDetalhe(id,c)}</td></tr>`:""); }).join("");
     return h; }).join("");
@@ -1091,6 +1097,8 @@ function vDre(){
         <div class="field"><label for="fdIni">De</label><input type="month" id="fdIni" value="${esc(ui.d.ini)}"></div>
         <div class="field"><label for="fdFim">Até</label><input type="month" id="fdFim" value="${esc(ui.d.fim)}"></div>
         <div class="field"><span class="flabel">Regime</span><div class="seg"><button data-f="d.regime" data-v="competencia" aria-pressed="${ui.d.regime==="competencia"}">Competência</button><button data-f="d.regime" data-v="caixa" aria-pressed="${ui.d.regime==="caixa"}">Caixa</button></div></div>
+        ${(()=>{ const gs=DRE_LINHAS.filter(x=>x[0]==="grp").map(x=>x[1]); const todosF=gs.every(g=>(ui.dreFech||{})[g]), nenhumF=gs.every(g=>!(ui.dreFech||{})[g]);
+          return `<div class="field"><span class="flabel">Exibir</span><div class="seg"><button data-act="dre-resumo" data-v="1" aria-pressed="${todosF}">Só os tópicos</button><button data-act="dre-resumo" data-v="0" aria-pressed="${nenhumF}">Detalhado</button></div></div>`; })()}
       </div>
       ${(()=>{ const ks=Object.keys(d.semTaxa||{}); if(!ks.length) return ""; const nomeT=id=>{ const t=taxasAtuais().find(x=>x.id===id); return t?t.nome:id; };
         const faixa=set=>{ const a=[...set].sort(); return a.length===1?mlabel(a[0]):`${mlabel(a[0])} a ${mlabel(a[a.length-1])}`; };
@@ -3229,6 +3237,8 @@ document.addEventListener("click",async e=>{
   if(act==="ir-taxas"){ ui.txMes=a.dataset.mes||mkey(HOJE); taxasRasc=null; ui.view="taxas"; render(); window.scrollTo(0,0); return; }
   if(act==="mover-sem-loja"&&isAdm()){ confirmBtn(a,"Confirmar: mover todos",()=>moverSemLoja(a)); return; }
   if(act==="ver-sem-loja"){ ui.view="lancamentos"; ui.l={tipo:"todos",mes:"",q:"",semLoja:true}; render(); return; }
+  if(act==="dre-grp"){ ui.dreFech=ui.dreFech||{}; const g=a.dataset.g; if(ui.dreFech[g]) delete ui.dreFech[g]; else ui.dreFech[g]=true; render(); return; }
+  if(act==="dre-resumo"){ ui.dreFech={}; if(a.dataset.v==="1") DRE_LINHAS.filter(x=>x[0]==="grp").forEach(x=>ui.dreFech[x[1]]=true); render(); return; }
   if(act==="dre-abrir"){ ui.dreAb=ui.dreAb||{}; if(ui.dreAb[id]) delete ui.dreAb[id]; else ui.dreAb[id]=true; render(); return; }
   if(act==="anl-modo"){ ui.anl=ui.anl||{}; ui.anl[a.dataset.k]=a.dataset.v; render(); return; }
   if(act==="ver-chamados"){ ui.view="chamados"; ui.chTab="chamados"; render(); return; }
