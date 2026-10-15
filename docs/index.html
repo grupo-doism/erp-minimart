@@ -213,7 +213,8 @@ tfoot td{font-weight:600;background:var(--surface-2)}
 .mp-m{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
 .mp-m button,.ms{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 4px;cursor:pointer;font-size:13px;text-transform:capitalize;color:var(--ink-2)}
 .mp-m button.hoje,.ms.hoje{border-color:var(--muted)}
-.mp-m button[aria-pressed="true"],.ms.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.mp-m button[aria-pressed="true"],.ms.on{background:var(--brand);color:#000;border:2px solid #000;font-weight:800;box-shadow:0 2px 0 rgba(0,0,0,.25);transform:translateY(-1px)}
+.ms.hoje:not(.on){position:relative}.ms.hoje:not(.on)::after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--brand)}
 .mstrip{margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
 .ms-row{display:flex;gap:4px;align-items:center;overflow-x:auto;padding-bottom:2px}
 .ms{padding:6px 10px;white-space:nowrap;font-family:var(--f-mono);font-size:12.5px;text-transform:none}
@@ -462,12 +463,13 @@ table.dre tr.dre-det>td{padding:0 0 10px 26px;background:var(--surface-2)}
 .pill-btn[data-armed]{background:var(--neg);color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600}
 table.dre tr.dre-grp{cursor:pointer}table.dre tr.dre-grp:hover td{background:var(--accent-soft)}
 .dre-seta-g{display:inline-block;width:14px;color:var(--accent);transition:transform .15s}tr.dre-grp.fechado .dre-seta-g{transform:rotate(-90deg)}
+.dash-per{margin-top:-6px}.hbars.hb12 .hb{padding:1px 0}.hbars.hb12 .hb-l,.hbars.hb12 .hb-v{font-size:11px}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
 .kpi .sub b.up{color:var(--pos)}
 .hbars{display:flex;flex-direction:column;gap:5px}
-.hb{display:grid;grid-template-columns:48px 1fr 74px;gap:8px;align-items:center;font-size:12px}
+.hb{display:grid;grid-template-columns:48px 1fr 118px;gap:8px;align-items:center;font-size:12px}.hb .hb-v{text-align:right;white-space:nowrap}
 .hb-l{font-family:var(--f-mono);color:var(--muted)}.hb-v{text-align:right;color:var(--ink-2)}
 .hb-t{height:10px;background:var(--line-2);border-radius:5px;overflow:hidden}.hb-t i{display:block;height:100%;background:var(--brand);opacity:.55;border-radius:5px}
 .hb.cur .hb-t i{opacity:1}.hb.cur .hb-l,.hb.cur .hb-v{color:var(--ink);font-weight:700}
@@ -900,26 +902,32 @@ function vPainel(){
   const soma=a=>a.reduce((x,l)=>x+l.valor,0);
   const venc=aberto.filter(l=>l.venc<HOJE);
   const recebido=soma(L.filter(l=>l.pago&&l.tipo==="receita")), pago=soma(L.filter(l=>l.pago&&l.tipo==="despesa"));
-  const cur=mkey(HOJE);
-  const d=dreCalc(cur,cur,"competencia",cc);
+  const cur=mkey(HOJE); const P=dashPer(); const hojeMes=P.modo==="mes"&&P.atual;
+  const d=dreCalc(P.ini,P.fim,"competencia",cc); const FP=finPer(P,cc);
   const prox=[...aberto].filter(l=>l.venc<=addDays(HOJE,10)).sort((a,b)=>a.venc.localeCompare(b.venc)).slice(0,8);
   const agsCC = a => ccOk(a.lojaId,cc);
   const ags=S.ag.filter(a=>agsCC(a)&&a.data>=HOJE&&a.data<=addDays(HOJE,14)&&!a.concluido).sort((a,b)=>(a.data+agIni(a)).localeCompare(b.data+agIni(b))).slice(0,7);
-  const porLoja = (!cc||cc==="lojas") ? dreCalc(cur,cur,"competencia","") : null;
+  const porLoja = (!cc||cc==="lojas") ? dreCalc(P.ini,P.fim,"competencia","") : null;
   const cens = porLoja ? [...centros(),...(porLoja.byCen[""].rec||porLoja.byCen[""].gas?[{id:"",nome:"Sem loja (mover)"}]:[])] : [];
   return `<figure class="quote" role="note">${(()=>{ const f=fraseDoDia(); return `<span class="q-lbl">Frase do dia</span><blockquote><p>${esc(f.texto)}</p></blockquote><figcaption>— ${esc(f.autor)}</figcaption>`; })()}</figure>`
-   + header("Dashboard", `${new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · ${esc(ccLabel(cc))}`, relBtns("dash",{xlsx:false})+ccSelect())
+   + header("Dashboard", `${hojeMes?new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"}):"Vendo "+esc(P.nome)} · ${esc(ccLabel(cc))}`, relBtns("dash",{xlsx:false})+ccSelect())
+   + `<div class="toolbar dash-per">${dashFiltro()}</div>`
    + banners()
    + bizBlock(cc)
-   + `<div class="sec-lbl">Indicadores financeiros</div><div class="kpis">
+   + (hojeMes?`<div class="sec-lbl">Indicadores financeiros</div><div class="kpis">
       <div class="kpi hero"><span class="lbl">Saldo realizado</span><span class="val">${fmt(recebido-pago)}</span><span class="sub">Recebido ${fmt0(recebido)} · Pago ${fmt0(pago)}</span></div>
       <div class="kpi"><span class="lbl">A receber · 30 dias</span><span class="val tipo-r">${fmt(soma(rec30))}</span><span class="sub">${rec30.length} título(s) em aberto</span></div>
       <div class="kpi"><span class="lbl">A pagar · 30 dias</span><span class="val tipo-d">${fmt(soma(pag30))}</span><span class="sub">${pag30.length} título(s) em aberto</span></div>
       <div class="kpi"><span class="lbl">Vencidos</span><span class="val ${venc.length?'neg':''}">${venc.length}</span><span class="sub">${fmt0(soma(venc.filter(l=>l.tipo==="receita")))} a receber · ${fmt0(soma(venc.filter(l=>l.tipo==="despesa")))} a pagar</span></div>
-    </div>
+    </div>`:`<div class="sec-lbl">Indicadores financeiros · ${esc(P.nome)}</div><div class="kpis">
+      <div class="kpi hero"><span class="lbl">Saldo do período</span><span class="val">${fmt(FP.recebido-FP.pago)}</span><span class="sub">recebido − pago com data em ${esc(P.label)}</span></div>
+      <div class="kpi"><span class="lbl">Recebido</span><span class="val tipo-r">${fmt(FP.recebido)}</span><span class="sub">entradas com baixa no período</span></div>
+      <div class="kpi"><span class="lbl">Pago</span><span class="val tipo-d">${fmt(FP.pago)}</span><span class="sub">saídas com baixa no período</span></div>
+      <div class="kpi"><span class="lbl">Ficou em aberto</span><span class="val ${FP.venc.length?'neg':''}">${FP.ab.length}</span><span class="sub">${fmt0(FP.aRec)} a receber · ${fmt0(FP.aPag)} a pagar${FP.venc.length?` · ${FP.venc.length} vencido(s)`:""}</span></div>
+    </div>`)+`
     <div class="grid g2">
-      <div class="panel"><h2>Fluxo de caixa<small>3 meses para trás, 3 à frente</small></h2>${legendFlux}<div class="chart" id="chPainel"></div></div>
-      <div class="panel"><h2>Resultado de ${MESES_L[+cur.slice(5)-1].toLowerCase()}<small>competência</small></h2>
+      <div class="panel"><h2>Fluxo de caixa<small>${P.modo==="ano"?"meses de "+P.y:"3 meses antes e 2 depois de "+esc(P.label)}</small></h2>${legendFlux}<div class="chart" id="chPainel"></div></div>
+      <div class="panel"><h2>Resultado ${P.modo==="ano"?"de "+P.y:"de "+esc(P.curto)}<small>competência${P.modo==="mes"&&!P.atual?" · "+esc(P.label):""}</small></h2>
         <div class="list">
           ${[["Receita bruta",d.tot.receita],["Receita líquida",d.tot.RL],["Lucro bruto",d.tot.LB],["Resultado operacional",d.tot.RO],["Resultado líquido",d.tot.RLIQ]].map(([n,v],i)=>`
           <div class="li" style="grid-template-columns:1fr auto auto"><span ${i===4?'style="font-weight:700"':''}>${n}</span><span class="num note">${i?pct(v,d.tot.RL):""}</span><span class="num ${v<0?'neg':''}" ${i===4?'style="font-weight:600"':''}>${fmt(v)}</span></div>`).join("")}
@@ -927,7 +935,7 @@ function vPainel(){
         <p class="note" style="margin:10px 0 0">Margem bruta ${pct(d.tot.LB,d.tot.RL)} · CMV ${pct(-d.tot.cmv,d.tot.RL)} da receita líquida</p>
       </div>
     </div>
-    <div class="grid g2e" style="margin-top:16px">
+    ${!hojeMes?(()=>{ const a=analiseDre(d); const per=`${esc(P.label)} · competência · ${esc(ccLabel(cc))}`; return `<div class="grid g2" style="margin-top:16px">${analiseHTML("dashRec","Receitas por categoria",per,a.rec)}${analiseHTML("dashGas","Custos e despesas por categoria",per,a.gas)}</div>`; })():`<div class="grid g2e" style="margin-top:16px">
       <div class="panel"><h2>Vencimentos próximos<small>vencidos e próximos 10 dias</small></h2>
         <div class="list">${prox.length?prox.map(l=>`
           <div class="li clk" data-act="edit-lanc" data-id="${l.id}">
@@ -947,24 +955,50 @@ function vPainel(){
         ${(()=>{ const an=anivEntre(HOJE,14,cc); return an.length?`<div class="aniv-list">${an.map(x=>`<div class="aniv-row">🎂 <span class="num">${dShort(x.data)}</span> ${esc(x.titulo)}</div>`).join("")}</div>`:""; })()}
         <button class="btn sm" style="margin-top:10px" data-nav="agenda">Abrir agenda</button>
       </div>
-    </div>
-    ${porLoja&&S.lojas.length?`<div class="panel" style="margin-top:16px"><h2>Resultado do mês por centro de custo<small>competência · ${mlabel(cur)}</small></h2>${cenTable(porLoja,cens)}</div>`:""}`;
+    </div>`}
+    ${porLoja&&S.lojas.length?`<div class="panel" style="margin-top:16px"><h2>Resultado por loja<small>competência · ${esc(P.modo==="ano"?P.y:P.label)}</small></h2>${cenTable(porLoja,cens)}</div>`:""}`;
 }
 const ehFat = l => l.tipo==="receita" && (catBy(l.categoria)?.grupo||"receita")==="receita";
+/* ---------- dashboard: período (mês ou ano) ---------- */
+function dashPer(){
+  const cur=mkey(HOJE); const d=ui.dash||{};
+  if(d.modo==="ano"){ const y=String(d.ano||cur.slice(0,4)); return {modo:"ano",ini:y+"-01",fim:y+"-12",atual:y===cur.slice(0,4),y,label:y,nome:`ano de ${y}`,curto:y}; }
+  const m=d.mes||cur; return {modo:"mes",ini:m,fim:m,atual:m===cur,m,label:mlabel(m),nome:`${MESES_L[+m.slice(5)-1].toLowerCase()} de ${m.slice(0,4)}`,curto:MESES_L[+m.slice(5)-1].toLowerCase()};
+}
+function dashAnos(){ const cur=+mkey(HOJE).slice(0,4); let min=cur; S.lanc.forEach(l=>{ const y=+String(compOf(l)||"").slice(0,4); if(y&&y<min&&y>1990) min=y; }); const a=[]; for(let y=cur;y>=min;y--) a.push(String(y)); return a; }
+function fatPer(p,cc){
+  if(p.modo==="mes"){ const ms=[]; for(let i=5;i>=0;i--) ms.push(addMonths(p.m,-i)); const serie=ms.map(k=>({k,v:fatMes(k,cc)})); const fat=serie[5].v, ant=serie[4].v;
+    return {fat,ant,serie,cmpTxt:`vs ${mlabel(ms[4])}`,barTxt:"últimos 6 meses",destaque:p.m}; }
+  const y=p.y, cur=mkey(HOJE); const serie=[]; for(let i=1;i<=12;i++) serie.push({k:`${y}-${pad(i)}`,v:fatMes(`${y}-${pad(i)}`,cc)});
+  const ateM = p.atual ? +cur.slice(5) : 12;   // ano corrente: compara os mesmos meses do ano anterior
+  const fat=serie.reduce((a,x)=>a+x.v,0); let ant=0; for(let i=1;i<=ateM;i++) ant+=fatMes(`${+y-1}-${pad(i)}`,cc);
+  const fatCmp = p.atual ? serie.slice(0,ateM).reduce((a,x)=>a+x.v,0) : fat;
+  return {fat,ant,fatCmp,serie,cmpTxt:p.atual?`vs jan–${MESES_L[ateM-1].slice(0,3).toLowerCase()} de ${+y-1}`:`vs ${+y-1}`,barTxt:`meses de ${y}`,destaque:p.atual?cur:""};
+}
+function finPer(p,cc){
+  const L=S.lanc.filter(l=>inCC(l,cc)); const no=d=>!!d&&mkey(d)>=p.ini&&mkey(d)<=p.fim; const soma=a=>a.reduce((x,l)=>x+l.valor,0);
+  const recebido=soma(L.filter(l=>l.pago&&l.tipo==="receita"&&no(l.pago))), pago=soma(L.filter(l=>l.pago&&l.tipo==="despesa"&&no(l.pago)));
+  const ab=L.filter(l=>!l.pago&&no(l.venc)); const venc=ab.filter(l=>l.venc<HOJE);
+  return {recebido,pago,ab,venc,aRec:soma(ab.filter(l=>l.tipo==="receita")),aPag:soma(ab.filter(l=>l.tipo==="despesa")),soma};
+}
+function dashFiltro(){
+  const p=dashPer(), cur=mkey(HOJE);
+  return `<div class="field"><span class="flabel">Período</span><div class="seg"><button data-act="dash-modo" data-v="mes" aria-pressed="${p.modo==="mes"}">Mês</button><button data-act="dash-modo" data-v="ano" aria-pressed="${p.modo==="ano"}">Ano</button></div></div>
+    ${p.modo==="mes"?`<div class="field"><label for="dashMes">Mês</label><input type="month" id="dashMes" value="${esc(p.m)}" max="${esc(addMonths(cur,12))}"></div>`
+      :`<div class="field"><label for="dashAno">Ano</label><select id="dashAno">${dashAnos().map(y=>opt(y,y,p.y)).join("")}</select></div>`}
+    ${p.atual&&p.modo==="mes"?"":`<button class="btn sm" data-act="dash-hoje" style="align-self:flex-end;margin-bottom:3px">Voltar ao mês atual</button>`}`;
+}
+
 function fatMes(k,cc){ return S.lanc.reduce((a,l)=>a+(ehFat(l)&&inCC(l,cc)&&compOf(l)===k?l.valor:0),0); }
 const lojaAtiva = l => l.ativa!==false && (!l.inauguracao || l.inauguracao<=HOJE);
 function bizBlock(cc){
-  const cur=mkey(HOJE); const ms=[]; for(let i=5;i>=0;i--) ms.push(addMonths(cur,-i));
-  const serie=ms.map(k=>({k,v:fatMes(k,cc)})); const fat=serie[5].v, ant=serie[4].v;
-  const mx=Math.max(1,...serie.map(x=>x.v));
-  const varPct = ant ? (fat-ant)/ant*100 : null;
-  const lj=S.lojas.filter(l=>ccOk(l.id,cc==="matriz"?"":cc));
-  const ativas=lj.filter(lojaAtiva).length;
-  const lojaSel=lojaBy(ccLoja(cc));
-  return `<div class="sec-lbl">Indicadores do negócio</div><div class="biz biz2">
-    <div class="kpi fat"><div class="fat-top"><div><span class="lbl">Faturamento · ${MESES_L[+cur.slice(5)-1].toLowerCase()}</span><span class="val">${fmt(fat)}</span>
-      <span class="sub">${varPct==null?"sem base no mês anterior":`<b class="${varPct<0?"neg":"up"}">${varPct>=0?"▲":"▼"} ${Math.abs(varPct).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</b> vs ${mlabel(ms[4])}`}</span></div></div>
-      <div class="hbars" role="img" aria-label="Evolução do faturamento nos últimos 6 meses">${serie.map(x=>`<div class="hb ${x.k===cur?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmtK(x.v):"—"}</span></div>`).join("")}</div>
+  const p=dashPer(); const F=fatPer(p,cc); const base=p.modo==="ano"&&p.atual?F.fatCmp:F.fat;
+  const mx=Math.max(1,...F.serie.map(x=>x.v)); const varPct = F.ant ? (base-F.ant)/F.ant*100 : null;
+  const lj=S.lojas.filter(l=>ccOk(l.id,cc)); const ativas=lj.filter(lojaAtiva).length; const lojaSel=lojaBy(ccLoja(cc));
+  return `<div class="sec-lbl">Indicadores do negócio · ${esc(p.nome)}</div><div class="biz biz2">
+    <div class="kpi fat"><div class="fat-top"><div><span class="lbl">Faturamento · ${esc(p.modo==="ano"?p.y+(p.atual?" (até hoje)":""):p.curto)}</span><span class="val">${fmt(F.fat)}</span>
+      <span class="sub">${varPct==null?(p.modo==="ano"?"sem base no ano anterior":"sem base no mês anterior"):`<b class="${varPct<0?"neg":"up"}">${varPct>=0?"▲":"▼"} ${Math.abs(varPct).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</b> ${esc(F.cmpTxt)}`}${p.modo==="ano"?` · média ${fmtK(Math.round(F.fat/Math.max(1,F.serie.filter(x=>x.v).length)))}/mês`:""}</span></div></div>
+      <div class="hbars ${p.modo==="ano"?"hb12":""}" role="img" aria-label="Evolução do faturamento — ${esc(F.barTxt)}">${F.serie.map(x=>`<div class="hb ${x.k===F.destaque?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmt(x.v):"—"}</span></div>`).join("")}</div>
     </div>
     <div class="kpi"><span class="lbl">${lojaSel?"Status da loja":"Lojas ativas"}</span><span class="val">${lojaSel?(lojaAtiva(lojaSel)?"Ativa":"Inativa"):ativas}</span><span class="sub">${lojaSel?(lojaSel.inauguracao?"inaugurada em "+dBR(lojaSel.inauguracao):"sem data de inauguração"):`de ${lj.length} loja(s) cadastrada(s)`}</span></div>
   </div>`;
@@ -997,8 +1031,8 @@ function mesStrip(sel){
   const base=ui.c.mesBase||mkey(HOJE); const ms=[]; for(let i=-5;i<=6;i++) ms.push(addMonths(base,i));
   return `<div class="mstrip"><span class="flabel">Mês de pagamento</span><div class="ms-row">
     <button type="button" class="icon-btn" data-act="ms-nav" data-n="-6" aria-label="Meses anteriores">‹</button>
-    <button type="button" class="ms ${!sel?"on":""}" data-act="ms-sel" data-k="">Todos</button>
-    ${ms.map(k=>`<button type="button" class="ms ${k===sel?"on":""} ${k===mkey(HOJE)?"hoje":""}" data-act="ms-sel" data-k="${k}">${mlabel(k)}</button>`).join("")}
+    <button type="button" class="ms ${!sel?"on":""}" data-act="ms-sel" data-k="" aria-pressed="${!sel}">Todos</button>
+    ${ms.map(k=>`<button type="button" class="ms ${k===sel?"on":""} ${k===mkey(HOJE)?"hoje":""}" data-act="ms-sel" data-k="${k}" aria-pressed="${k===sel}" title="${k===mkey(HOJE)?"mês atual":""}">${mlabel(k)}</button>`).join("")}
     <button type="button" class="icon-btn" data-act="ms-nav" data-n="6" aria-label="Próximos meses">›</button></div></div>`;
 }
 function vContas(tipo){
@@ -1304,15 +1338,15 @@ function vLojas(){
   const mz=mzDraft||matriz(); const podeMz=masterRede();
   const ls=lojasOrd();
   const nL=id=>S.lanc.filter(l=>l.centro===id).length;
-  return header("Lojas","A matriz representa a empresa como um todo (o geral). Cada loja é um centro de custo: lançamentos, relatórios e painel podem ser vistos por loja.",isAdm()?`<button class="btn pri" data-act="new-loja">+ Nova loja</button>`:"")
+  return header("Lojas","Dados da empresa (razão social, CNPJ de login e contatos) e as lojas. Cada loja é um centro de custo: lançamentos, relatórios e painel podem ser vistos por loja.",isAdm()?`<button class="btn pri" data-act="new-loja">+ Nova loja</button>`:"")
     + banners()
     + `<div class="grid g2e">
-      <div class="panel" style="align-self:start"><h2>Matriz<small>${podeMz?"você pode editar":"mantida pela franqueadora"}</small></h2>
+      <div class="panel" style="align-self:start"><h2>${masterRede()||S.claims.papel==="observador"?"Dados da empresa do franqueado":"Dados da minha empresa"}${podeMz?"<small>você pode editar</small>":""}</h2>
         <form id="fMz" novalidate>
           ${mzCamposHTML("mz_",mz,!podeMz)}
           ${podeMz?`<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px"><span class="err" id="mzErr" role="alert"></span><button type="submit" class="btn pri">Salvar matriz</button></div>`:""}
         </form>
-        <p class="note" style="margin:12px 0 0">O <b>CNPJ</b> é o login do franqueado e o <b>e-mail principal</b> recebe o link de recuperação de senha. ${podeMz?"Só a franqueadora edita a matriz; cada alteração fica registrada no Diário.":"Para alterar algum dado, fale com a franqueadora."} Aparece no cabeçalho dos relatórios em PDF.</p>
+        <p class="note" style="margin:12px 0 0">O <b>CNPJ</b> é o login do franqueado e o <b>e-mail principal</b> recebe o link de recuperação de senha. ${podeMz?"Só a franqueadora edita os dados da empresa; cada alteração fica registrada no Diário.":"Para alterar algum dado, fale com a franqueadora."} Aparece no cabeçalho dos relatórios em PDF.</p>
       </div>
       <div class="panel" style="align-self:start"><h2>Lojas<small>${ls.length} cadastrada(s)</small></h2>
         <div class="list">${ls.length?ls.map(x=>`<div class="loja-row clk" data-act="edit-loja" data-id="${x.id}">
@@ -1333,7 +1367,7 @@ function bindMatriz(){
     const antes=matriz(); const mud=MZ_CAMPOS.filter(([k])=>(antes[k]||"")!==(e[k]||"")).map(([k,l])=>`${l}: "${antes[k]||""}" → "${e[k]||""}"`);
     if(!mud.length){ toast("Nada foi alterado"); return; }
     const b=ev.submitter; if(b) b.disabled=true;
-    try{ await chamar("salvarMatriz",{tid:S.tid,matriz:e}); mzDraft=null; toast("Dados da matriz salvos — o login do franqueado acompanha CNPJ e e-mail principal"); }
+    try{ await chamar("salvarMatriz",{tid:S.tid,matriz:e}); mzDraft=null; toast("Dados da empresa salvos — o login do franqueado acompanha CNPJ e e-mail principal"); }
     catch(x){ err.textContent="Não foi possível salvar: "+(x.message||""); if(b) b.disabled=false; }
   });
 }
@@ -1429,8 +1463,7 @@ function render(){
   main.innerHTML=(V||vPainel)();
   if(ui.view==="lojas") bindMatriz();
   if(ui.view==="meucad") bindMeuCadastro();
-  if(ui.view==="painelrede") fluxChart(fluxoRede(new Set(redeFiltrada().map(t=>t.id))),"chRede");
-  if(ui.view==="painel") fluxChart(fluxoMeses(addMonths(mkey(HOJE),-3),6,ui.cc),"chPainel");
+  if(ui.view==="painel"){ const P=dashPer(); fluxChart(P.modo==="ano"?fluxoMeses(P.ini,12,ui.cc):fluxoMeses(addMonths(P.m,-3),6,ui.cc),"chPainel"); }
   if(ui.view==="fluxo") fluxChart(fluxoMeses(ui.f.ini,12,ui.cc),"chFluxo");
   if(focusId){ const el=document.getElementById(focusId); if(el&&!$("#modalRoot").contains(el)){ el.focus(); try{ if(selStart!=null) el.setSelectionRange(selStart,selStart); }catch(e){} } }
 }
@@ -2071,24 +2104,32 @@ const pdfArquivo = base => `minimart-${base}-${pSlug(ccLabel(ui.cc))}-${HOJE}`;
 
 /* dashboard */
 async function pdfDashboard(){
-  const cc=ui.cc, cur=mkey(HOJE), MES=`${MESES_L[+cur.slice(5)-1].toLowerCase()} de ${cur.slice(0,4)}`;
-  const K=await pdfNovo(false,"Dashboard",`Resumo de ${MES} · posição em ${dBR(HOJE)}`);
+  const cc=ui.cc, P=dashPer(), cur=P.modo==="mes"?P.m:mkey(HOJE), MES=P.nome, hojeMes=P.modo==="mes"&&P.atual;
+  const K=await pdfNovo(false,"Dashboard",`${P.modo==="ano"?"Resumo do ano de "+P.y:"Resumo de "+MES} · gerado em ${dBR(HOJE)}`);
   const {doc,M,CW}=K;
   /* negócio */
-  const ms=[]; for(let i=5;i>=0;i--) ms.push(addMonths(cur,-i));
-  const serie=ms.map(k=>({k,v:fatMes(k,cc)})); const fat=serie[5].v, ant=serie[4].v; const vp=ant?(fat-ant)/ant*100:null;
+  const FA=fatPer(P,cc); const serie=FA.serie, fat=FA.fat, ant=FA.ant; const vp=ant?(((P.modo==="ano"&&P.atual)?FA.fatCmp:fat)-ant)/ant*100:null;
   const lj=S.lojas.filter(l=>ccOk(l.id,cc==="matriz"?"":cc)), ativas=lj.filter(lojaAtiva).length, lojaSel=lojaBy(ccLoja(cc));
   pdfSec(K,"Indicadores do negócio",MES);
   pdfCards(K,[
-    {lbl:"Faturamento do mês",val:fmt(fat),sub:vp==null?"sem base no mês anterior":`${vp>=0?"+":"-"}${Math.abs(vp).toLocaleString("pt-BR",{maximumFractionDigits:1})}% vs ${mlabel(ms[4])}`,subCor:vp==null?null:vp<0?[255,160,150]:[140,225,180],hero:true},
+    {lbl:P.modo==="ano"?"Faturamento do ano":"Faturamento do mês",val:fmt(fat),sub:vp==null?"sem base de comparação":`${vp>=0?"+":"-"}${Math.abs(vp).toLocaleString("pt-BR",{maximumFractionDigits:1})}% ${FA.cmpTxt}`,subCor:vp==null?null:vp<0?[255,160,150]:[140,225,180],hero:true},
     {lbl:lojaSel?"Status da loja":"Lojas ativas",val:lojaSel?(lojaAtiva(lojaSel)?"Ativa":"Inativa"):String(ativas),sub:lojaSel?(lojaSel.inauguracao?"inaugurada em "+dBR(lojaSel.inauguracao):""):`de ${lj.length} loja(s) cadastrada(s)`}
   ]);
-  pdfSec(K,"Evolução do faturamento","últimos 6 meses",6*6.4);
-  K.y+=pdfBarrasH(K,serie.map(x=>({lbl:MESES_L[+x.k.slice(5)-1].slice(0,3)+"/"+x.k.slice(2,4),v:x.v,cor:x.k===cur?PC.blue:PC.blueL,bold:x.k===cur})),M,K.y,CW,{lw:18,vw:30})+7;
+  pdfSec(K,"Evolução do faturamento",FA.barTxt,serie.length*(P.modo==="ano"?3.6:6.4));
+  K.y+=pdfBarrasH(K,serie.map(x=>({lbl:MESES_L[+x.k.slice(5)-1].slice(0,3)+"/"+x.k.slice(2,4),v:x.v,cor:x.k===FA.destaque?PC.blue:PC.blueL,bold:x.k===FA.destaque})),M,K.y,CW,{lw:18,vw:30,rh:P.modo==="ano"?3.6:undefined,bh:P.modo==="ano"?2.6:undefined})+5;
   /* financeiro */
   const L=S.lanc.filter(l=>inCC(l,cc)), ate=addDays(HOJE,30), ab=L.filter(l=>!l.pago), soma=a=>a.reduce((x,l)=>x+l.valor,0);
   const rec30=ab.filter(l=>l.tipo==="receita"&&l.venc>=HOJE&&l.venc<=ate), pag30=ab.filter(l=>l.tipo==="despesa"&&l.venc>=HOJE&&l.venc<=ate), venc=ab.filter(l=>l.venc<HOJE);
   const recebido=soma(L.filter(l=>l.pago&&l.tipo==="receita")), pago=soma(L.filter(l=>l.pago&&l.tipo==="despesa"));
+  if(!hojeMes){ const FP=finPer(P,cc);
+    pdfSec(K,"Indicadores financeiros",MES);
+    pdfCards(K,[
+      {lbl:"Saldo do período",val:fmt(FP.recebido-FP.pago),sub:"recebido − pago no período",cor:FP.recebido-FP.pago<0?PC.neg:null},
+      {lbl:"Recebido",val:fmt(FP.recebido),sub:"entradas com baixa",cor:[10,138,214]},
+      {lbl:"Pago",val:fmt(FP.pago),sub:"saídas com baixa",acc:PC.dark},
+      {lbl:"Ficou em aberto",val:String(FP.ab.length),sub:`${fmtK(FP.aRec)} a receber · ${fmtK(FP.aPag)} a pagar`,cor:FP.venc.length?PC.neg:null,acc:FP.venc.length?PC.neg:PC.blue}
+    ],21);
+  } else {
   pdfSec(K,"Indicadores financeiros");
   pdfCards(K,[
     {lbl:"Saldo realizado",val:fmt(recebido-pago),sub:`recebido ${fmtK(recebido)} · pago ${fmtK(pago)}`,cor:recebido-pago<0?PC.neg:null},
@@ -2096,12 +2137,14 @@ async function pdfDashboard(){
     {lbl:"A pagar · 30 dias",val:fmt(soma(pag30)),sub:`${pag30.length} título(s)`,acc:PC.dark},
     {lbl:"Vencidos",val:String(venc.length),sub:`${fmtK(soma(venc.filter(l=>l.tipo==="receita")))} a receber · ${fmtK(soma(venc.filter(l=>l.tipo==="despesa")))} a pagar`,cor:venc.length?PC.neg:null,acc:venc.length?PC.neg:PC.blue}
   ],21);
-  pdfSec(K,"Fluxo de caixa","3 meses para trás e 3 à frente",60);
+  }
+  const hF=P.modo==="ano"?44:54;
+  pdfSec(K,"Fluxo de caixa",P.modo==="ano"?"meses de "+P.y:"3 meses antes e 2 depois",hF+6);
   pdfLegenda(K,M+CW-96,K.y-5.2,[[PC.blue,"Entradas"],[PC.blueL,"A receber"],[PC.dark,"Saídas"],[PC.grayL,"A pagar"]]);
-  pdfBarrasV(K,fluxoMeses(addMonths(cur,-3),6,cc),M,K.y,CW,54); K.y+=62;
+  pdfBarrasV(K,P.modo==="ano"?fluxoMeses(P.ini,12,cc):fluxoMeses(addMonths(cur,-3),6,cc),M,K.y,CW,hF); K.y+=hF+8;
   /* resultado */
-  const d=dreCalc(cur,cur,"competencia",cc);
-  pdfSec(K,"Resultado do mês","competência · "+MES,40);
+  const d=dreCalc(P.ini,P.fim,"competencia",cc);
+  pdfSec(K,P.modo==="ano"?"Resultado do ano":"Resultado do mês","competência · "+MES,40);
   pdfTabela(K,[{h:"Linha do resultado",w:70},{h:"Valor",w:25,a:"r"},{h:"% da receita líquida",w:22,a:"r"}],
     [["Receita bruta",d.tot.receita,""],["Receita líquida",d.tot.RL,"sub"],["Lucro bruto",d.tot.LB,""],["Resultado operacional",d.tot.RO,""],["Resultado líquido",d.tot.RLIQ,"tot"]].map(([n,v,s],i)=>({c:[n,M$(v),i?pct(v,d.tot.RL):""],s})));
   pdfRodape(K);
@@ -2359,7 +2402,7 @@ function entrarApp(){
 function assinarPlano(){ UNSUB_REDE.push(vigiar("rede_config",{cols:"id,data",id:"plano"},rows=>{ S.planoRede=rows[0]?rows[0].data:null; render(); },"id=eq.plano")); }
 async function carregarIndicadores(){
   if(!masterRede()) return;
-  const ini=addMonths(mkey(HOJE),-12), fim=addMonths(mkey(HOJE),6);
+  const P=redePer(); const ini=[addMonths(mkey(HOJE),-12),P.modo==="ano"?`${+P.y-1}-01`:addMonths(P.m,-6)].sort()[0], fim=addMonths(mkey(HOJE),6);
   const {data,error}=await FB.sb.rpc("indicadores_rede",{p_ini:ini,p_fim:fim});
   if(error){ console.warn("indicadores",error.message); return; }
   S.resumos=(data||[]).map(r=>({tid:r.tid,mes:r.mes,fat:+r.fat||0,rec:+r.rec||0,desp:+r.desp||0,recebido:+r.recebido||0,pago:+r.pago||0,abRec:+r.ab_rec||0,abPag:+r.ab_pag||0}));
@@ -2594,63 +2637,71 @@ function fluxoRede(tids){
   for(let i=-3;i<3;i++){ const k=addMonths(cur,i); const m={k,inR:somaRes(k,"recebido",tids),outR:somaRes(k,"pago",tids),inP:k>=cur?somaRes(k,"abRec",tids)+(k===cur?venc("abRec"):0):0,outP:k>=cur?somaRes(k,"abPag",tids)+(k===cur?venc("abPag"):0):0}; m.res=m.inR+m.inP-m.outR-m.outP; out.push(m); }
   return out;
 }
+function redePer(){
+  const cur=mkey(HOJE); const d=ui.rper||{};
+  if(d.modo==="ano"){ const y=String(d.ano||cur.slice(0,4)); return {modo:"ano",y,ini:y+"-01",fim:y+"-12",atual:y===cur.slice(0,4),nome:`ano de ${y}`}; }
+  const m=d.mes||cur; return {modo:"mes",m,ini:m,fim:m,atual:m===cur,nome:`${MESES_L[+m.slice(5)-1].toLowerCase()} de ${m.slice(0,4)}`};
+}
+function redeAnos(){ const cur=+mkey(HOJE).slice(0,4); let min=cur; S.resumos.forEach(r=>{ const y=+String(r.mes||"").slice(0,4); if(y&&y<min&&y>1990) min=y; }); const a=[]; for(let y=cur;y>=Math.min(min,cur-1);y--) a.push(String(y)); return a; }
 function vPainelRede(){
-  const cur=mkey(HOJE), ant=addMonths(cur,-1), MES=MESES_L[+cur.slice(5)-1].toLowerCase();
+  const cur=mkey(HOJE), P=redePer();
   const tens=redeFiltrada(), tids=new Set(tens.map(t=>t.id));
   const regs=[...new Set(S.tenants.map(t=>String((t.matriz&&t.matriz.regional)||"")).filter(Boolean))].sort((a,b)=>(+a||0)-(+b||0)||a.localeCompare(b));
   const ativos=tens.filter(t=>t.ativo!==false), emUso=ativos.filter(t=>tsMs(t.ultimoAcesso)>Date.now()-30*864e5);
   const lojasAt=tens.reduce((a,t)=>a+(+t.nLojasAtivas||0),0), lojasTot=tens.reduce((a,t)=>a+(+t.nLojas||0),0);
-  const fat=somaRes(cur,"fat",tids), fatA=somaRes(ant,"fat",tids), vp=fatA?(fat-fatA)/fatA*100:null;
-  const rec=somaRes(cur,"rec",tids), desp=somaRes(cur,"desp",tids), res=rec-desp;
-  const recebido=somaRes(cur,"recebido",tids), pago=somaRes(cur,"pago",tids);
-  const abRec=somaRes(null,"abRec",tids), abPag=somaRes(null,"abPag",tids);
-  const vRec=somaRes(null,"abRec",tids,m=>m<cur), vPag=somaRes(null,"abPag",tids,m=>m<cur);
-  const serie=[]; for(let i=5;i>=0;i--){ const k=addMonths(cur,-i); serie.push({k,v:somaRes(k,"fat",tids)}); } const mx=Math.max(1,...serie.map(x=>x.v));
-  const rk=tens.map(t=>{ const f=somaRes(cur,"fat",new Set([t.id])), fa=somaRes(ant,"fat",new Set([t.id])), r=somaRes(cur,"rec",new Set([t.id]))-somaRes(cur,"desp",new Set([t.id])); return {t,f,fa,v:fa?(f-fa)/fa*100:null,r}; }).sort((a,b)=>b.f-a.f);
-  const porReg={}; tens.forEach(t=>{ const r=String((t.matriz&&t.matriz.regional)||"Sem regional"); porReg[r]=(porReg[r]||0)+somaRes(cur,"fat",new Set([t.id])); });
+  // faturamento do período e do período de comparação
+  const meses=k0=>{ const a=[]; for(let i=1;i<=12;i++) a.push(`${k0}-${pad(i)}`); return a; };
+  const fatDe=(lista,ids)=>lista.reduce((a,k)=>a+somaRes(k,"fat",ids),0);
+  let atuais, anteriores, serie, cmpTxt;
+  if(P.modo==="mes"){ atuais=[P.m]; anteriores=[addMonths(P.m,-1)]; serie=[]; for(let i=5;i>=0;i--) serie.push(addMonths(P.m,-i)); cmpTxt=`vs ${mlabel(addMonths(P.m,-1))}`; }
+  else { serie=meses(P.y); const ate=P.atual?+cur.slice(5):12; atuais=serie.slice(0,ate); anteriores=meses(+P.y-1).slice(0,ate); cmpTxt=P.atual?`vs jan–${MESES_L[ate-1].slice(0,3).toLowerCase()} de ${+P.y-1}`:`vs ${+P.y-1}`; }
+  const fat=fatDe(P.modo==="ano"?serie:atuais,tids), fatCmp=fatDe(atuais,tids), fatA=fatDe(anteriores,tids), vp=fatA?(fatCmp-fatA)/fatA*100:null;
+  const sv=serie.map(k=>({k,v:somaRes(k,"fat",tids)})); const mx=Math.max(1,...sv.map(x=>x.v));
+  const nMesesCom=Math.max(1,sv.filter(x=>x.v).length);
+  const ticket=lojasAt?Math.round(fat/lojasAt):null;
+  const rk=tens.map(t=>{ const ids=new Set([t.id]); const f=fatDe(P.modo==="ano"?serie:atuais,ids), fc=fatDe(atuais,ids), fa=fatDe(anteriores,ids); const nl=+t.nLojasAtivas||0;
+    const r=(P.modo==="ano"?serie:atuais).reduce((a,k)=>a+somaRes(k,"rec",ids)-somaRes(k,"desp",ids),0); return {t,f,v:fa?(fc-fa)/fa*100:null,nl,tk:nl?Math.round(f/nl):null,r}; }).sort((a,b)=>b.f-a.f);
+  const porReg={}; rk.forEach(x=>{ const r=String((x.t.matriz&&x.t.matriz.regional)||"Sem regional"); porReg[r]=(porReg[r]||0)+x.f; });
   const regMax=Math.max(1,...Object.values(porReg));
   const semUso=ativos.filter(t=>!(tsMs(t.ultimoAcesso)>Date.now()-30*864e5));
   const negativos=rk.filter(x=>x.r<0&&x.t.ativo!==false);
   const chamP=S.chamRede.filter(c=>tids.has(c.tid));
   const card=(lbl,val,sub,cls,hero)=>`<div class="kpi ${hero?"hero":""}"><span class="lbl">${lbl}</span><span class="val ${cls||""}">${val}</span><span class="sub">${sub||""}</span></div>`;
-  return header("Painel da rede",`${new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · soma de ${tens.length} franqueado(s)${ui.rreg?" da regional "+esc(ui.rreg):""}`,
+  const filtroPer=`<div class="field"><span class="flabel">Período</span><div class="seg"><button data-act="rper-modo" data-v="mes" aria-pressed="${P.modo==="mes"}">Mês</button><button data-act="rper-modo" data-v="ano" aria-pressed="${P.modo==="ano"}">Ano</button></div></div>
+    ${P.modo==="mes"?`<div class="field"><label for="rperMes">Mês</label><input type="month" id="rperMes" value="${esc(P.m)}" max="${esc(cur)}"></div>`:`<div class="field"><label for="rperAno">Ano</label><select id="rperAno">${redeAnos().map(y=>opt(y,y,P.y)).join("")}</select></div>`}
+    ${P.modo==="mes"&&P.atual?"":`<button class="btn sm" data-act="rper-hoje" style="align-self:flex-end;margin-bottom:3px">Voltar ao mês atual</button>`}`;
+  return header("Painel da rede",`${P.modo==="mes"&&P.atual?new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"}):"Vendo "+esc(P.nome)} · soma de ${tens.length} franqueado(s)${ui.rreg?" da regional "+esc(ui.rreg):""}`,
       `<div class="field"><label for="rrSel">Regional</label><select id="rrSel">${opt("","Todas as regionais",ui.rreg||"")}${regs.map(r=>opt(r,"Regional "+r,ui.rreg||"")).join("")}</select></div><button class="btn" data-act="recalc" title="Busca os números mais recentes de todos os franqueados">Atualizar números</button>`)
+   + `<div class="toolbar dash-per">${filtroPer}</div>`
    + `<div class="sec-lbl">A rede</div><div class="kpis">
        ${card("Franqueados ativos",`${ativos.length}<span class="val-sub">/${tens.length}</span>`,`${tens.length-ativos.length} suspenso(s)`,"",true)}
        ${card("Usando o sistema",`${emUso.length}`,`acessaram nos últimos 30 dias · ${ativos.length?Math.round(emUso.length/ativos.length*100):0}% dos ativos`)}
        ${card("Lojas ativas",`${lojasAt}`,`de ${lojasTot} cadastrada(s) na rede`)}
        ${card("Chamados aguardando você",`${chamP.length}`,chamP.length?"abertos pelos franqueados":"nenhum aguardando",chamP.length?"neg":"")}
      </div>
-     <div class="sec-lbl">Negócio · ${MES}</div><div class="biz biz2">
-       <div class="kpi fat"><div class="fat-top"><div><span class="lbl">Faturamento da rede</span><span class="val">${fmt(fat)}</span>
-         <span class="sub">${vp==null?"sem base no mês anterior":`<b class="${vp<0?"neg":"up"}">${vp>=0?"▲":"▼"} ${Math.abs(vp).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</b> vs ${mlabel(ant)}`} · média por loja ${lojasAt?fmt0(Math.round(fat/lojasAt)):"—"}</span></div></div>
-         <div class="hbars">${serie.map(x=>`<div class="hb ${x.k===cur?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmtK(x.v):"—"}</span></div>`).join("")}</div></div>
-       ${card("Resultado da rede",fmt(res),`receitas ${fmtK(rec)} − despesas ${fmtK(desp)} · margem ${rec?pct(res,rec):"—"}`,res<0?"neg":"")}
-     </div>
-     <div class="sec-lbl">Financeiro · ${MES}</div><div class="kpis">
-       ${card("Recebido no mês",fmt(recebido),"entradas com baixa","tipo-r")}
-       ${card("Pago no mês",fmt(pago),"saídas com baixa","tipo-d")}
-       ${card("A receber em aberto",fmt(abRec),vRec?`${fmtK(vRec)} vencido`:"nada vencido","tipo-r")}
-       ${card("A pagar em aberto",fmt(abPag),vPag?`${fmtK(vPag)} vencido`:"nada vencido",vPag?"neg":"")}
-     </div>
-     <div class="grid g2">
-       <div class="panel"><h2>Fluxo de caixa da rede<small>3 meses para trás, 3 à frente</small></h2>${legendFlux}<div class="chart" id="chRede"></div></div>
-       <div class="panel"><h2>Faturamento por regional<small>${MES}</small></h2><div class="list">${Object.entries(porReg).sort((a,b)=>b[1]-a[1]).map(([r,v])=>`<div class="hb" style="grid-template-columns:110px 1fr 90px;padding:5px 0"><span class="hb-l">${r==="Sem regional"?r:"Regional "+esc(r)}</span><span class="hb-t"><i style="width:${v/regMax*100}%;opacity:1"></i></span><span class="hb-v num">${fmtK(v)}</span></div>`).join("")||'<div class="empty">—</div>'}</div></div>
+     <div class="sec-lbl">Negócio · ${esc(P.nome)}</div><div class="biz biz2">
+       <div class="kpi fat"><div class="fat-top"><div><span class="lbl">Faturamento da rede${P.modo==="ano"&&P.atual?" (até hoje)":""}</span><span class="val">${fmt(fat)}</span>
+         <span class="sub">${vp==null?"sem base de comparação":`<b class="${vp<0?"neg":"up"}">${vp>=0?"▲":"▼"} ${Math.abs(vp).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</b> ${esc(cmpTxt)}`}</span></div></div>
+         <div class="hbars ${P.modo==="ano"?"hb12":""}">${sv.map(x=>`<div class="hb ${(P.modo==="mes"?x.k===P.m:x.k===cur)?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmt(x.v):"—"}</span></div>`).join("")}</div></div>
+       ${card("Ticket médio da rede",ticket==null?"—":fmt(ticket),lojasAt?`faturamento ÷ ${lojasAt} loja(s) ativa(s)${P.modo==="ano"?` · ${fmt0(Math.round(fat/lojasAt/nMesesCom))} por loja/mês`:""}`:"nenhuma loja ativa","",false)}
      </div>
      <div class="grid g2" style="margin-top:16px">
-       <div class="panel"><h2>Ranking de franqueados<small>faturamento de ${MES}</small></h2><div class="tbl-wrap" style="border:0"><table><thead><tr><th>#</th><th>Franqueado</th><th class="r">Faturamento</th><th class="r">vs mês ant.</th><th class="r">Resultado</th><th class="r">Lojas</th><th></th></tr></thead><tbody>
+       <div class="panel"><h2>Ranking de franqueados<small>faturamento · ${esc(P.nome)}</small></h2><div class="tbl-wrap" style="border:0"><table><thead><tr><th>#</th><th>Franqueado</th><th class="r">Faturamento</th><th class="r">${P.modo==="ano"?"vs ano ant.":"vs mês ant."}</th><th class="r">Ticket por loja</th><th class="r">Lojas</th><th></th></tr></thead><tbody>
          ${rk.map((x,i)=>`<tr><td class="num note">${i+1}</td><td><div class="desc">${esc(tNome(x.t))}</div><div class="meta">${x.t.matriz&&x.t.matriz.regional?"Reg. "+esc(x.t.matriz.regional)+" · ":""}${x.t.ativo===false?"suspenso":diasTxt(x.t.ultimoAcesso)}</div></td>
-           <td class="r num">${fmt(x.f)}</td><td class="r num ${x.v==null?"":x.v<0?"neg":"pos"}">${x.v==null?"—":(x.v>=0?"+":"")+x.v.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"}</td><td class="r num ${x.r<0?"neg":""}">${fmt(x.r)}</td><td class="r num">${+x.t.nLojasAtivas||0}</td>
+           <td class="r num">${fmt(x.f)}</td><td class="r num ${x.v==null?"":x.v<0?"neg":"pos"}">${x.v==null?"—":(x.v>=0?"+":"")+x.v.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"}</td><td class="r num">${x.tk==null?"—":fmt(x.tk)}</td><td class="r num">${x.nl}</td>
            <td class="r"><button class="btn sm" data-act="entrar-tenant" data-id="${x.t.id}">Entrar</button></td></tr>`).join("")||'<tr><td colspan="7" class="empty">Nenhum franqueado.</td></tr>'}
        </tbody></table></div></div>
-       <div class="panel" style="align-self:start"><h2>Pontos de atenção</h2><div class="list">
-         ${chamP.map(c=>{ const t=S.tenants.find(x=>x.id===c.tid); return `<div class="alerta a-ch clk" data-act="entrar-tenant" data-id="${c.tid}"><b>Chamado #${esc(c.numero)} aguardando</b><span>${esc(tNome(t))} · ${esc(c.tipo||"")}</span></div>`; }).join("")}
-         ${negativos.map(x=>`<div class="alerta a-neg clk" data-act="entrar-tenant" data-id="${x.t.id}"><b>Resultado negativo no mês</b><span>${esc(tNome(x.t))} · ${fmt(x.r)}</span></div>`).join("")}
-         ${semUso.map(t=>`<div class="alerta a-uso clk" data-act="entrar-tenant" data-id="${t.id}"><b>Sem acesso há 30+ dias</b><span>${esc(tNome(t))} · ${tsMs(t.ultimoAcesso)?"último em "+dtHora(t.ultimoAcesso):"nunca acessou"}</span></div>`).join("")}
-         ${!chamP.length&&!negativos.length&&!semUso.length?'<div class="empty">Nenhum ponto de atenção. 👍</div>':""}
-       </div></div>
+       <div style="display:flex;flex-direction:column;gap:16px">
+         <div class="panel"><h2>Faturamento por regional<small>${esc(P.nome)}</small></h2><div class="list">${Object.entries(porReg).sort((a,b)=>b[1]-a[1]).map(([r,v])=>`<div class="hb" style="grid-template-columns:100px 1fr 120px;padding:5px 0"><span class="hb-l">${r==="Sem regional"?r:"Regional "+esc(r)}</span><span class="hb-t"><i style="width:${v/regMax*100}%;opacity:1"></i></span><span class="hb-v num">${fmt(v)}</span></div>`).join("")||'<div class="empty">—</div>'}</div></div>
+         <div class="panel"><h2>Pontos de atenção</h2><div class="list">
+           ${chamP.map(c=>{ const t=S.tenants.find(x=>x.id===c.tid); return `<div class="alerta a-ch clk" data-act="entrar-tenant" data-id="${c.tid}"><b>Chamado #${esc(c.numero)} aguardando</b><span>${esc(tNome(t))} · ${esc(c.tipo||"")}</span></div>`; }).join("")}
+           ${negativos.map(x=>`<div class="alerta a-neg clk" data-act="entrar-tenant" data-id="${x.t.id}"><b>Resultado negativo · ${esc(P.nome)}</b><span>${esc(tNome(x.t))} · ${fmt(x.r)}</span></div>`).join("")}
+           ${semUso.map(t=>`<div class="alerta a-uso clk" data-act="entrar-tenant" data-id="${t.id}"><b>Sem acesso há 30+ dias</b><span>${esc(tNome(t))} · ${tsMs(t.ultimoAcesso)?"último em "+dtHora(t.ultimoAcesso):"nunca acessou"}</span></div>`).join("")}
+           ${!chamP.length&&!negativos.length&&!semUso.length?'<div class="empty">Nenhum ponto de atenção. 👍</div>':""}
+         </div></div>
+       </div>
      </div>
-     <p class="note" style="margin:12px 0 0">Os indicadores são calculados direto dos lançamentos de todos os franqueados (atualizam a cada minuto ou no botão “Atualizar números”). Faturamento = receitas nas categorias de receita bruta, pelo mês de competência. Recebido e pago = pela data da baixa.</p>`;
+     <p class="note" style="margin:12px 0 0">Calculado direto dos lançamentos de todos os franqueados (atualiza a cada minuto ou no botão “Atualizar números”). Faturamento = receitas da receita bruta, pelo mês de competência. Ticket médio = faturamento ÷ lojas ativas.</p>`;
 }
 function novoFranqModal(){
   openModal(`<h2>Novo franqueado</h2><form id="fNf" class="fcol" novalidate>
@@ -2697,7 +2748,7 @@ function bannerAcesso(){
   if(masterRede()){
     const av=abertos.length?`<div class="banner lib-banner">O franqueado abriu ${abertos.length} chamado(s) aguardando a sua resposta. <button class="btn sm pri" data-act="ver-chamados">Ver chamados</button></div>`:"";
     return av + (lib ? `<div class="banner lib-banner">Edição autorizada pelo franqueado até <b>${dtHora(am.ate)}</b> (chamado #${esc(am.numero||"")}). Todas as alterações ficam registradas. <button class="btn sm" data-act="encerrar-acesso">Encerrar agora</button></div>`
-      : `<div class="banner ro-banner">Você está em modo leitura (pode editar só a matriz, em Lojas). ${pend.length?`Há ${pend.length} chamado(s) aguardando aprovação do franqueado.`:""} <button class="btn sm" data-act="novo-chamado">Solicitar autorização de edição</button></div>`);
+      : `<div class="banner ro-banner">Você está em modo leitura (pode editar só os dados da empresa, em Lojas). ${pend.length?`Há ${pend.length} chamado(s) aguardando aprovação do franqueado.`:""} <button class="btn sm" data-act="novo-chamado">Solicitar autorização de edição</button></div>`);
   }
   if(masterFranq()&&pend.length) return `<div class="banner lib-banner">Chamado aguardando a sua aprovação de acesso: <b>${esc(pend[0].tipo)}</b> — ${esc(pend[0].descricao)} <button class="btn sm pri" data-act="ver-chamados">Ver e responder</button></div>`;
   if(gestorFranq()&&lib) return `<div class="banner info">A franqueadora está com acesso de edição até ${dtHora(am.ate)} (chamado #${esc(am.numero||"")}). ${masterFranq()?`<button class="btn sm" data-act="encerrar-acesso">Encerrar acesso</button>`:""}</div>`;
@@ -3237,6 +3288,10 @@ document.addEventListener("click",async e=>{
   if(act==="ir-taxas"){ ui.txMes=a.dataset.mes||mkey(HOJE); taxasRasc=null; ui.view="taxas"; render(); window.scrollTo(0,0); return; }
   if(act==="mover-sem-loja"&&isAdm()){ confirmBtn(a,"Confirmar: mover todos",()=>moverSemLoja(a)); return; }
   if(act==="ver-sem-loja"){ ui.view="lancamentos"; ui.l={tipo:"todos",mes:"",q:"",semLoja:true}; render(); return; }
+  if(act==="rper-modo"){ ui.rper=ui.rper||{}; ui.rper.modo=a.dataset.v; if(a.dataset.v==="ano"&&!ui.rper.ano) ui.rper.ano=(ui.rper.mes||mkey(HOJE)).slice(0,4); render(); carregarIndicadores(); return; }
+  if(act==="rper-hoje"){ ui.rper={modo:"mes",mes:mkey(HOJE)}; render(); carregarIndicadores(); return; }
+  if(act==="dash-modo"){ ui.dash=ui.dash||{}; ui.dash.modo=a.dataset.v; if(a.dataset.v==="ano"&&!ui.dash.ano) ui.dash.ano=(ui.dash.mes||mkey(HOJE)).slice(0,4); render(); return; }
+  if(act==="dash-hoje"){ ui.dash={modo:"mes",mes:mkey(HOJE)}; render(); return; }
   if(act==="dre-grp"){ ui.dreFech=ui.dreFech||{}; const g=a.dataset.g; if(ui.dreFech[g]) delete ui.dreFech[g]; else ui.dreFech[g]=true; render(); return; }
   if(act==="dre-resumo"){ ui.dreFech={}; if(a.dataset.v==="1") DRE_LINHAS.filter(x=>x[0]==="grp").forEach(x=>ui.dreFech[x[1]]=true); render(); return; }
   if(act==="dre-abrir"){ ui.dreAb=ui.dreAb||{}; if(ui.dreAb[id]) delete ui.dreAb[id]; else ui.dreAb[id]=true; render(); return; }
@@ -3297,6 +3352,10 @@ document.addEventListener("input",e=>{
 document.addEventListener("change",e=>{
   const t=e.target;
   if(t.id==="tenSel"){ abrirTenant(t.value); return; }
+  if(t.id==="rperMes"){ ui.rper={...(ui.rper||{}),modo:"mes",mes:t.value||mkey(HOJE)}; render(); carregarIndicadores(); return; }
+  if(t.id==="rperAno"){ ui.rper={...(ui.rper||{}),modo:"ano",ano:t.value}; render(); carregarIndicadores(); return; }
+  if(t.id==="dashMes"){ ui.dash={...(ui.dash||{}),modo:"mes",mes:t.value||mkey(HOJE)}; render(); return; }
+  if(t.id==="dashAno"){ ui.dash={...(ui.dash||{}),modo:"ano",ano:t.value}; render(); return; }
   if(t.id==="txMes"){ if(taxasRasc&&!confirm("Há alterações não salvas nas taxas. Trocar de mês e descartar?")){ t.value=mesTx(); return; } taxasRasc=null; ui.txMes=t.value||mkey(HOJE); render(); return; }
   if(t.id==="rrSel"){ ui.rreg=t.value; render(); return; }
   if(t.id==="dgCat"){ ui.dg=ui.dg||{}; ui.dg.cat=t.value; render(); return; }
