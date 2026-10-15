@@ -464,6 +464,12 @@ table.dre tr.dre-det>td{padding:0 0 10px 26px;background:var(--surface-2)}
 table.dre tr.dre-grp{cursor:pointer}table.dre tr.dre-grp:hover td{background:var(--accent-soft)}
 .dre-seta-g{display:inline-block;width:14px;color:var(--accent);transition:transform .15s}tr.dre-grp.fechado .dre-seta-g{transform:rotate(-90deg)}
 .dash-per{margin-top:-6px}.hbars.hb12 .hb{padding:1px 0}.hbars.hb12 .hb-l,.hbars.hb12 .hb-v{font-size:11px}
+.auto-box{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:4px}
+.fx-row{display:grid;grid-template-columns:auto 1fr auto 1fr 74px auto auto;gap:6px;align-items:center;margin-bottom:6px}
+.fx-row input{min-width:0}.fx-row .fx-pct{text-align:right;font-weight:700}
+.tag.t-auto{background:#E2F4FF;color:#0B4F7A;font-weight:700;font-size:10.5px}
+@media (max-width:640px){.fx-row{grid-template-columns:auto 1fr auto 1fr}.fx-row .fx-pct{grid-column:1/3}}
+.tag.t-ajust{background:#FFF4D6;color:#8A5A00}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -889,7 +895,8 @@ function bannersBase(){
   if([S.lanc,S.forn,S.ag,S.lojas].some(a=>a.some(x=>x.exemplo))) b+=`<div class="banner info">Há dados de exemplo (marcados com <span class="tag ex">exemplo</span>). Quando quiser começar de verdade, remova-os em Configurações.</div>`;
   return b;
 }
-const exTag = x => x.exemplo ? ' <span class="tag ex">exemplo</span>' : "";
+const autoTag = l => (l&&(l.auto==="royalty"||l.auto==="cashback"))?(autoManual(l)?' <span class="tag t-auto t-ajust">ajustado</span>':' <span class="tag t-auto">automático</span>'):"";
+const exTag = x => (x.exemplo ? ' <span class="tag ex">exemplo</span>' : "")+autoTag(x);
 const lojaTag = id => id ? `<span class="tag loja">${esc(cenNome(id)||"—")}</span>` : '<span class="note">—</span>';
 
 function vPainel(){
@@ -1597,6 +1604,12 @@ function lancForm(l,tipoDefault){
         :!isNew&&grp.length>1?`<div class="scope-box"><span class="flabel">Salvar alteração em:</span><div class="scope-btns"><button type="submit" class="btn" data-scope="one">Só nesta parcela</button><button type="submit" class="btn pri" data-scope="all">Todas as parcelas (${grp.length})</button></div></div>`
         :`<div class="scope-box" style="justify-content:flex-end"><button type="submit" class="btn pri">${isNew?"Salvar lançamento":"Salvar alterações"}</button></div>`}
     </form>`,true,m=>{
+      if(l.auto==="royalty"||l.auto==="cashback"){ ["#lCat","#lCen"].forEach(q=>{ const el=$(q); if(el) el.disabled=true; });
+        const f=$("#fL"), nome=l.auto==="royalty"?"royalties":"cashback", calc=calcAuto(l);
+        if(f) f.insertAdjacentHTML("afterbegin", autoManual(l)
+          ? `<div class="banner lib-banner" style="margin:0"><b>Valor ajustado manualmente</b> para este mês — não é mais recalculado. O cálculo automático daria <b>${calc==null?"—":fmt(calc)}</b>. ${l.pago?"":`<button type="button" class="btn sm" id="lAutoVolta">Voltar ao cálculo automático</button>`}</div>`
+          : `<div class="banner info" style="margin:0">Lançamento <b>automático</b> (${nome}): ${esc(l.obs||"")} ${l.pago?"Já foi pago, então não muda mais.":"Você pode <b>ajustar o valor ou o vencimento deste mês</b> aqui; o valor ajustado deixa de ser recalculado. A regra fica no cadastro da loja (Lojas)."}</div>`);
+        const bv=$("#lAutoVolta"); if(bv) bv.addEventListener("click",()=>confirmBtn(bv,`Confirmar: voltar para ${calc==null?"—":fmt(calc)}`,async()=>{ try{ await save("lanc",l.id,{...l,valor:calc,autoValor:calc,venc:l.autoVenc||l.venc}); diario("Royalties/cashback: voltou ao automático",`#${l.numero||""} ${l.descricao} → ${fmt(calc)}`,{cat:"alteracao"}); closeModal(); toast("Voltou ao cálculo automático"); agendarAuto(); }catch(e){} })); }
       const T=()=>$("#lTipo").value;
       m.querySelectorAll("[data-tp]").forEach(b=>b.addEventListener("click",()=>{
         const t=b.dataset.tp; $("#lTipo").value=t; m.querySelectorAll("[data-tp]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.tp===t));
@@ -1841,11 +1854,13 @@ function lojaForm(x){
       <div class="row">${F("telefone","Telefone","tel")}${F("email","E-mail","email")}</div>
       <label class="chkline" style="padding-top:0"><input type="checkbox" id="lj_ativa" ${x.ativa===false?"":"checked"}> Loja ativa (em operação)</label>
       <p class="note" style="margin:-4px 0 0">O aniversário da loja aparece todo ano na agenda, na data de inauguração.</p>
+      ${autoLojaHTML(x.auto)}
       ${usos?`<p class="note" style="margin:0">Usada em ${usos} lançamento(s)/compromisso(s) — por isso não pode ser excluída.</p>`:""}
       <div class="err" id="ljErr" role="alert"></div>
       <div class="foot"><div>${!isNew&&!usos?`<button type="button" class="btn danger" id="ljDel">Excluir</button>`:""}</div>
         <div><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn pri">${isNew?"Cadastrar loja":"Salvar alterações"}</button></div></div>
     </form>`,false,()=>{
+      bindAutoLoja();
       const bd=$("#ljDel"); if(bd) bd.addEventListener("click",()=>confirmBtn(bd,"Confirmar exclusão",async()=>{ try{ await del("lojas",x.id); if(ui.cc===x.id){ ui.cc=""; saveUi(); } closeModal(); toast("Loja excluída"); }catch(e){} }));
       $("#fLj").addEventListener("submit",async e=>{ e.preventDefault();
         const d={}; ["condominio","cnpj","sindico","inauguracao","endereco","telefone","email"].forEach(k=>d[k]=$("#lj_"+k).value.trim()); d.ativa=$("#lj_ativa").checked;
@@ -1855,15 +1870,118 @@ function lojaForm(x){
         if(d.cnpj&&digitos(d.cnpj).length!==14){ err.textContent="O CNPJ do condomínio deve ter 14 dígitos."; $("#lj_cnpj").focus(); return; }
         if(d.cnpj) d.cnpj=fmtDoc(d.cnpj);
         if(d.email&&!/^\S+@\S+\.\S+$/.test(d.email)){ err.textContent="E-mail inválido."; $("#lj_email").focus(); return; }
+        const au=lerAutoLoja(err); if(!au) return; d.auto=au;
         try{
           if(isNew){ const id=newId("lojas"); await save("lojas",id,{...d,codigo:proxCodigo(S.lojas,"L",3),criado:new Date().toISOString()}); }
           else await save("lojas",x.id,{...x,...d});
-          closeModal(); toast(isNew?"Loja cadastrada":"Loja atualizada");
+          closeModal(); toast(isNew?"Loja cadastrada":"Loja atualizada"); agendarAuto();
         }catch(ex){}
       });
     });
 }
 
+/* ---------- royalties e cashback automáticos ---------- */
+const fmtIn = c => (Number(c)/100).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+// ---- dias úteis: fins de semana e feriados nacionais (bancários) ----
+function pascoa(y){ const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451); const mes=Math.floor((h+l-7*m+114)/31), dia=((h+l-7*m+114)%31)+1; return Date.UTC(y,mes-1,dia); }
+const _fer={};
+function feriadosBR(y){ if(_fer[y]) return _fer[y];
+  const f=new Set(["01-01","04-21","05-01","09-07","10-12","11-02","11-15","11-20","12-25"].map(x=>`${y}-${x}`)); const p=pascoa(y);
+  [-48,-47,-2,60].forEach(dd=>f.add(new Date(p+dd*864e5).toISOString().slice(0,10)));   // Carnaval (seg e ter), Sexta-feira Santa, Corpus Christi
+  return (_fer[y]=f); }
+function proxDiaUtil(iso){ let t=Date.parse(iso+"T12:00:00Z"); for(let i=0;i<15;i++){ const d=new Date(t), s=d.toISOString().slice(0,10), w=d.getUTCDay(); if(w!==0&&w!==6&&!feriadosBR(d.getUTCFullYear()).has(s)) return s; t+=864e5; } return iso; }
+const VENDAS_AUTO=["rec_credito","rec_credito_antecip","rec_debito","rec_pix","rec_voucher1","rec_voucher2","rec_voucher3","rec_voucher4"];
+const pctNum = v => { const n=Number(String(v??"").trim().replace(/\s|%/g,"").replace(",",".")); return isFinite(n)?n:NaN; };
+const reaisCent = v => { if(v==null||String(v).trim()==="") return null; let t=String(v).trim().replace(/[R$\s]/g,"");
+  if(!t.includes(",")&&/^\d{1,3}(\.\d{3})+$/.test(t)) t=t.replace(/\./g,"");   // "10.000" = dez mil
+  const c=parseMoney(t); return isFinite(c)?c:NaN; };
+function autoLojaHTML(a){
+  a=a||{}; const roy=a.roy||{on:true,pct:5}; const cb=a.cb||{tipo:"nao"}; const fx=(cb.faixas&&cb.faixas.length)?cb.faixas:[{de:0,ate:1000000,pct:3},{de:1000001,ate:2000000,pct:5}];
+  const linha=(f,i)=>`<div class="fx-row" data-i="${i}"><span class="note">de R$</span><input class="fx-de" inputmode="decimal" value="${f.de==null?"":esc(fmtIn(f.de))}" aria-label="Faturamento de"><span class="note">até R$</span><input class="fx-ate" inputmode="decimal" value="${f.ate==null?"":esc(fmtIn(f.ate))}" placeholder="acima" aria-label="Faturamento até"><input class="fx-pct" inputmode="decimal" value="${esc(pctTxt(f.pct))}" aria-label="Percentual"><span>%</span><button type="button" class="icon-btn fx-del" aria-label="Remover faixa">✕</button></div>`;
+  return `<div class="sect">Royalties e cashback (lançados automaticamente)</div>
+    <div class="auto-box">
+      <label class="chkline" style="padding-top:0"><input type="checkbox" id="au_roy" ${roy.on===false?"":"checked"}> Calcular <b>royalties</b> sobre o faturamento da loja</label>
+      <div class="tx-pct" style="margin:-2px 0 6px 26px"><input id="au_roy_pct" inputmode="decimal" value="${esc(pctTxt(roy.pct??5))}" aria-label="Percentual de royalties"><span>% do faturamento</span></div>
+      <div class="flabel" style="margin-top:6px">Cashback ao condomínio</div>
+      <div class="seg" id="au_cb_seg" style="align-self:flex-start">${[["nao","Não calcular"],["fixo","Fixo"],["faixas","Variável por faixa"]].map(([v,t])=>`<button type="button" data-cb="${v}" aria-pressed="${(cb.tipo||"nao")===v}">${t}</button>`).join("")}</div>
+      <input type="hidden" id="au_cb" value="${esc(cb.tipo||"nao")}">
+      <div id="au_cb_fixo" class="tx-pct" style="margin-top:8px" ${cb.tipo==="fixo"?"":"hidden"}><input id="au_cb_pct" inputmode="decimal" value="${esc(pctTxt(cb.pct??""))}" placeholder="0,00" aria-label="Percentual de cashback"><span>% do faturamento</span></div>
+      <div id="au_cb_fx" style="margin-top:8px" ${cb.tipo==="faixas"?"":"hidden"}>
+        <div id="au_fx_lista">${fx.map(linha).join("")}</div>
+        <button type="button" class="btn sm" id="au_fx_add" style="margin-top:6px">+ Adicionar faixa</button>
+        <p class="note" style="margin:6px 0 0">O faturamento total do mês cai em uma faixa, e a % dela vale sobre o faturamento inteiro. Deixe "até" em branco na última faixa para "acima de".</p></div>
+      <div class="row" style="margin-top:10px"><div class="field"><label for="au_dia">Vencimento (dia do mês seguinte)</label><input id="au_dia" type="number" min="1" max="28" value="${esc(a.dia||7)}"></div>
+        <div class="field"><label for="au_desde">Calcular a partir de</label><input id="au_desde" type="month" value="${esc(a.desde||mkey(HOJE))}"></div></div>
+      <p class="note" style="margin:4px 0 0">Se o dia do vencimento cair em sábado, domingo ou feriado nacional, o sistema usa o próximo dia útil. Base: soma das vendas da loja no mês (crédito, crédito com antecipação, débito, Pix e vouchers). Os lançamentos aparecem em Contas a pagar, Fluxo e DRE e se atualizam enquanto estiverem em aberto; depois de pagos, não mudam mais.</p>
+    </div>`;
+}
+function bindAutoLoja(){
+  const box=document.querySelector(".auto-box"); if(!box) return;
+  box.querySelectorAll("[data-cb]").forEach(b=>b.addEventListener("click",()=>{ const v=b.dataset.cb; $("#au_cb").value=v; box.querySelectorAll("[data-cb]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.cb===v)); $("#au_cb_fixo").hidden=v!=="fixo"; $("#au_cb_fx").hidden=v!=="faixas"; }));
+  $("#au_fx_add").addEventListener("click",()=>{ const rows=[...box.querySelectorAll(".fx-row")]; const ult=rows[rows.length-1]; const deAnt=ult?reaisCent(ult.querySelector(".fx-ate").value):null;
+    const d=document.createElement("div"); d.innerHTML=`<div class="fx-row"><span class="note">de R$</span><input class="fx-de" inputmode="decimal" value="${deAnt!=null&&!isNaN(deAnt)?fmtIn(deAnt+1):""}"><span class="note">até R$</span><input class="fx-ate" inputmode="decimal" placeholder="acima"><input class="fx-pct" inputmode="decimal" placeholder="0,00"><span>%</span><button type="button" class="icon-btn fx-del" aria-label="Remover faixa">✕</button></div>`;
+    $("#au_fx_lista").appendChild(d.firstChild); });
+  $("#au_fx_lista").addEventListener("click",e=>{ const b=e.target.closest(".fx-del"); if(b) b.closest(".fx-row").remove(); });
+}
+function lerAutoLoja(err){
+  const on=$("#au_roy").checked; const rp=pctNum($("#au_roy_pct").value);
+  if(on&&(isNaN(rp)||rp<0||rp>100)){ err.textContent="Informe a % de royalties (ex.: 5)."; $("#au_roy_pct").focus(); return null; }
+  const tipo=$("#au_cb").value; const cb={tipo};
+  if(tipo==="fixo"){ const v=pctNum($("#au_cb_pct").value); if(isNaN(v)||v<0||v>100||$("#au_cb_pct").value.trim()===""){ err.textContent="Informe a % do cashback fixo."; $("#au_cb_pct").focus(); return null; } cb.pct=v; }
+  if(tipo==="faixas"){ const fx=[];
+    for(const r of document.querySelectorAll(".fx-row")){ const de=reaisCent(r.querySelector(".fx-de").value), ate=reaisCent(r.querySelector(".fx-ate").value), pc=pctNum(r.querySelector(".fx-pct").value);
+      if(de==null&&ate==null&&r.querySelector(".fx-pct").value.trim()==="") continue;
+      if(de==null||isNaN(de)||(ate!=null&&isNaN(ate))||isNaN(pc)||r.querySelector(".fx-pct").value.trim()===""){ err.textContent="Preencha cada faixa: de, até (ou em branco na última) e a %."; return null; }
+      if(ate!=null&&ate<de){ err.textContent="Em uma faixa, o valor “até” está menor que o “de”."; return null; }
+      fx.push({de,ate,pct:pc}); }
+    if(!fx.length){ err.textContent="Adicione pelo menos uma faixa de cashback."; return null; }
+    fx.sort((a,b)=>a.de-b.de);
+    for(let i=1;i<fx.length;i++){ if(fx[i-1].ate==null||fx[i].de<=fx[i-1].ate){ err.textContent="As faixas de cashback estão se sobrepondo. Confira os valores."; return null; } }
+    cb.faixas=fx; }
+  const dia=Math.min(28,Math.max(1,parseInt($("#au_dia").value)||7)); const desde=$("#au_desde").value||mkey(HOJE);
+  return {roy:{on,pct:on?rp:(isNaN(rp)?5:rp)},cb,dia,desde};
+}
+const autoManual = l => !!l && l.autoValor!=null && l.valor!==l.autoValor;
+function calcAuto(l){ // quanto o cálculo automático daria para este lançamento
+  const lj=lojaBy(l.centro); const a=lj&&lj.auto; if(!a) return null; const m=l.competencia;
+  const b=S.lanc.filter(x=>!x.auto&&x.tipo==="receita"&&x.centro===lj.id&&VENDAS_AUTO.includes(x.categoria)&&compOf(x)===m).reduce((s,x)=>s+x.valor,0);
+  if(l.auto==="royalty") return (a.roy&&a.roy.on!==false)?Math.round(b*(+a.roy.pct||0)/100):0;
+  return Math.round(b*pctCashback(a.cb,b)/100);
+}
+function pctCashback(cb,base){ if(!cb||cb.tipo==="nao") return 0; if(cb.tipo==="fixo") return +cb.pct||0;
+  const f=(cb.faixas||[]).find(x=>base>=x.de&&(x.ate==null||base<=x.ate)); return f?+f.pct:0; }
+let autoBusy=false, autoT=null;
+function agendarAuto(){ clearTimeout(autoT); autoT=setTimeout(()=>sincAuto(),1200); }
+async function sincAuto(){
+  if(autoBusy||!S.db||!S.tid||!S.loaded||!S.loaded.lanc) return;
+  if(nivel("lanc")<2) return; if(S.claims.papel==="master_rede"&&!S.liberado) return; if(S.claims.papel==="observador") return;
+  autoBusy=true;
+  try{
+    const desejo={}; const chave=(t,lj,m)=>`auto_${S.tid}_${t}_${lj}_${m.replace("-","")}`;
+    for(const lj of S.lojas){ const a=lj.auto; if(!a) continue;
+      const base={}; S.lanc.forEach(l=>{ if(l.auto||l.tipo!=="receita"||l.centro!==lj.id||!VENDAS_AUTO.includes(l.categoria)) return; const m=compOf(l); if(m&&m>=(a.desde||"0000-00")) base[m]=(base[m]||0)+l.valor; });
+      for(const [m,b] of Object.entries(base)){ if(!b) continue;
+        const venc=proxDiaUtil(`${addMonths(m,1)}-${pad(Math.min(28,a.dia||7))}`);
+        if(a.roy&&a.roy.on!==false&&+a.roy.pct>0){ const v=Math.round(b*a.roy.pct/100); if(v>0) desejo[chave("roy",lj.id,m)]={tipo:"roy",lj,m,v,pct:+a.roy.pct,base:b,venc}; }
+        const pc=pctCashback(a.cb,b); if(pc>0){ const v=Math.round(b*pc/100); if(v>0) desejo[chave("cb",lj.id,m)]={tipo:"cb",lj,m,v,pct:pc,base:b,venc}; }
+      } }
+    const col=S.db.collection(COL.lanc); let numero=proxNumero(); let mud=0;
+    for(const [id,w] of Object.entries(desejo)){
+      const ex=S.lanc.find(l=>l.id===id); if(ex&&ex.pago) continue;
+      if(autoManual(ex)) continue;                               // valor ajustado à mão: não recalcula este mês
+      const vencFinal = ex&&ex.autoVenc&&ex.venc&&ex.venc!==ex.autoVenc ? ex.venc : w.venc;   // vencimento trocado à mão: mantém
+      const nome=w.tipo==="roy"?"Royalties":"Cashback ao condomínio";
+      const desc=`${nome} ${pctTxt(w.pct)}% — ${mlabel(w.m)}`, obs=`Calculado automaticamente: ${pctTxt(w.pct)}% sobre vendas de ${fmt(w.base)} (${cenNome(w.lj.id)}, ${mlabel(w.m)}).`;
+      if(ex&&ex.valor===w.v&&ex.autoValor===w.v&&ex.descricao===desc&&ex.centro===w.lj.id&&ex.venc===vencFinal&&ex.autoVenc===w.venc) continue;
+      const doc={...(ex||{}),tipo:"despesa",descricao:desc,valor:w.v,categoria:w.tipo==="roy"?"cop_royalties":"cop_cashback",centro:w.lj.id,competencia:w.m,dataLanc:ultimoDia(+w.m.slice(0,4),+w.m.slice(5)),venc:vencFinal,autoValor:w.v,autoVenc:w.venc,pago:null,forma:ex&&ex.forma?ex.forma:(w.tipo==="roy"?"Boleto":"Transferência"),fornecedorId:ex?ex.fornecedorId||null:null,obs,
+        auto:w.tipo==="roy"?"royalty":"cashback",autoBase:w.base,autoPct:w.pct,numero:ex?ex.numero:numero++,parcela:"",criadoPor:ex?ex.criadoPor:"automatico",criado:ex?ex.criado:new Date().toISOString()};
+      delete doc.id; await col.doc(id).set(doc); mud++;
+    }
+    for(const l of S.lanc){ if(l.auto&&!l.pago&&!autoManual(l)&&(l.auto==="royalty"||l.auto==="cashback")&&!desejo[l.id]){ await col.doc(l.id).delete(); mud++; } }
+    if(mud) diario("Royalties/cashback atualizados",`${mud} lançamento(s) automático(s) criado(s) ou ajustado(s) conforme as vendas`,{cat:"alteracao"});
+  }catch(e){ console.warn("auto",e&&e.message); }
+  finally{ autoBusy=false; }
+}
 /* ---------- categoria ---------- */
 function catForm(id){
   const todas=cfg().categorias; const it=todas.find(x=>x.id===id);
@@ -2435,11 +2553,11 @@ function abrirTenant(tid){
   const sub=(ref,fn)=>UNSUB.push(ref.onSnapshot(fn,e=>console.warn(e)));
   UNSUB.push(vigiar("tenants",{cols:"id,data",id:tid},rows=>{ S.tenant=rows[0]?{...rows[0].data,id:rows[0].id}:null; computeRole(); render(); },"id=eq."+tid));
   sub(S.db.doc("config/main"),s=>{ S.cfg=s.exists?s.data():null; S.cfgLoaded=true; render(); });
-  sub(S.db.collection(COL.lanc),s=>{ S.lanc=s.docs.map(strip); S.loaded.lanc=true; render(); agendarRec(); });
+  sub(S.db.collection(COL.lanc),s=>{ S.lanc=s.docs.map(strip); S.loaded.lanc=true; render(); agendarRec(); agendarAuto(); });
   sub(S.db.collection(COL.rec),s=>{ S.rec=s.docs.map(strip); S.loaded.rec=true; render(); agendarRec(); });
   sub(S.db.collection(COL.forn),s=>{ S.forn=s.docs.map(strip); S.loaded.forn=true; render(); agendarCodigos(); });
   sub(S.db.collection(COL.ag),s=>{ S.ag=s.docs.map(strip); render(); });
-  sub(S.db.collection(COL.lojas),s=>{ S.lojas=s.docs.map(strip); render(); });
+  sub(S.db.collection(COL.lojas),s=>{ S.lojas=s.docs.map(strip); render(); agendarAuto(); });
   sub(S.db.collection(COL.usr),s=>{ S.usr=s.docs.map(strip); S.names={}; S.usr.forEach(u=>S.names[u.id]=u.nome||u.email||""); if(S.me) S.names[S.me.id]=S.names[S.me.id]||S.me.name; render(); });
   if(gestorFranq()||plat()){
     sub(S.db.collection("chamados").orderBy("solicitadoEm","desc").limit(200),s=>{ S.cham=s.docs.map(strip); render(); });
