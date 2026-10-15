@@ -471,6 +471,9 @@ table.dre tr.dre-grp{cursor:pointer}table.dre tr.dre-grp:hover td{background:var
 @media (max-width:640px){.fx-row{grid-template-columns:auto 1fr auto 1fr}.fx-row .fx-pct{grid-column:1/3}}
 .tag.t-ajust{background:#FFF4D6;color:#8A5A00}
 .au-linha{margin-top:4px}.au-linha .field input{max-width:180px}
+.txl-row{display:grid;grid-template-columns:minmax(120px,1.2fr) 120px 1fr 28px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line-2)}
+.txl-row .meta{font-size:11.5px}.txl-row b.txl-nome{font-size:13px}
+@media (max-width:640px){.txl-row{grid-template-columns:1fr 110px 28px}.txl-row .meta{display:none}}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -630,12 +633,12 @@ function catsBase(){
 }
 function catsExtra(){ const c=S.cfg||{}; const ids=new Set([...catsBase().map(x=>x.id),...Object.keys(CAT_LEGADO)]); const l=Array.isArray(c.categoriasExtra)?c.categoriasExtra:Array.isArray(c.categorias)?c.categorias:[]; return l.filter(x=>x&&!ids.has(x.id)).map(x=>x.grupo==="venda"?{...x,grupo:"despop"}:x); }
 let _cfgK=null,_cfgV=null;
-const cfg = () => { if(_cfgK&&_cfgK[0]===S.cfg&&_cfgK[1]===S.planoRede) return _cfgV; const c={...(S.cfg||{})}; delete c.categoriasExtra; const tx=(S.cfg&&Array.isArray(S.cfg.taxas))?S.cfg.taxas:[];
-  c.categorias=[...catsBase().map(x=>{ const m=/^rec_voucher(\d)$/.exec(x.id); const t=m&&tx.find(y=>y.id==="voucher"+m[1]); return {...x,base:true,...(t&&t.nome&&normTxt(t.nome)!==normTxt("voucher "+m[1])?{nome:x.nome+" — "+t.nome}:{})}; }),...catsExtra()]; _cfgV=c; _cfgK=[S.cfg,S.planoRede]; return c; };
+const cfg = () => { if(_cfgK&&_cfgK[0]===S.cfg&&_cfgK[1]===S.planoRede&&_cfgK[2]===S.lojas) return _cfgV; const c={...(S.cfg||{})}; delete c.categoriasExtra; const tx=["voucher1","voucher2","voucher3","voucher4"].map(id=>({id,nome:nomeVoucher(id)||("Voucher "+id.slice(7))}));
+  c.categorias=[...catsBase().map(x=>{ const m=/^rec_voucher(\d)$/.exec(x.id); const t=m&&tx.find(y=>y.id==="voucher"+m[1]); return {...x,base:true,...(t&&t.nome&&normTxt(t.nome)!==normTxt("voucher "+m[1])?{nome:x.nome+" — "+t.nome}:{})}; }),...catsExtra()]; _cfgV=c; _cfgK=[S.cfg,S.planoRede,S.lojas]; return c; };
 const matriz = () => (S.tenant&&S.tenant.matriz) || {};
 const catBy = id => cfg().categorias.find(c=>c.id===id) || (CAT_LEGADO[id]?cfg().categorias.find(c=>c.id===CAT_LEGADO[id]):undefined) || (id&&id.startsWith("_tx_")?txCatInfo(id):undefined);
-function taxaPct(modal,k){ const v=pctEm(modal,k||mkey(HOJE)); return isFinite(v)&&v>0?v:0; }
-function txCatInfo(id){ const modal=id.slice(4); const t=taxasAtuais().find(x=>x.id===modal); return {id,nome:`Taxa de cartão — ${t?t.nome:modal}`,grupo:"deducao",tipo:"despesa",auto:true}; }
+function taxaPct(modal,k,lojaId){ const v=pctEmLoja(lojaId,modal,k||mkey(HOJE)); return isFinite(v)&&v>0?v:0; }
+function txCatInfo(id){ const modal=id.slice(4); const p=TAXAS_PADRAO.find(x=>x.id===modal); const nv=/^voucher\d$/.test(modal)?nomeVoucher(modal):""; return {id,nome:`Taxa de cartão — ${nv||(p?p.nome:modal)}`,grupo:"deducao",tipo:"despesa",auto:true}; }
 const fornBy = id => S.forn.find(f=>f.id===id);
 const lojaBy = id => S.lojas.find(l=>l.id===id);
 const lojaNome = x => x ? (x.condominio||x.nome||"Loja sem nome") : "";
@@ -759,7 +762,7 @@ const ICONS = {
 };
 const VIEWS_T = [
   ["painel","Dashboard"],["receber","Contas a receber"],["pagar","Contas a pagar"],["fluxo","Fluxo de caixa"],["dre","DRE financeiro"],
-  ["sep"],["lancamentos","Lançamentos"],["taxas","Minhas taxas"],["fornecedores","Fornecedores"],["agenda","Agenda"],["lojas","Lojas"],["sep"],["chamados","Chamados"],["usuarios","Usuários"],["config","Configurações"]
+  ["sep"],["lancamentos","Lançamentos"],["fornecedores","Fornecedores"],["agenda","Agenda"],["lojas","Lojas"],["sep"],["chamados","Chamados"],["usuarios","Usuários"],["config","Configurações"]
 ];
 function viewsOk(){ if(plat()&&!S.tid){ return masterRede()?[["painelrede","Painel da rede"],["rede","Franqueados"],["planorede","Plano de contas da rede"],["sep"],["equiperede","Equipe da rede"],["diariorede","Diário da rede"],["meucad","Meu cadastro"]]:[["rede","Franqueados"],["sep"],["meucad","Meu cadastro"]]; }
   const v=[]; if(S.tid) VIEWS_T.forEach(x=>{ if(["chamados","diario","usuarios"].includes(x[0])&&!(gestorFranq()||plat())) return; if(VIEW_MOD[x[0]]&&nivel(VIEW_MOD[x[0]])<1) return; if(x[0]==="sep"&&(!v.length||v[v.length-1][0]==="sep")) return; v.push(x); }); while(v.length&&v[v.length-1][0]==="sep") v.pop(); return v; }
@@ -818,8 +821,8 @@ function dreCalc(ini,fim,regime,cc){
     const bc=byCen[l.centro]?l.centro:""; if(v>0) byCen[bc].rec+=v; else byCen[bc].gas+=-v;
     // taxa de cartão automática: % cadastrada em "Minhas taxas" sobre cada venda da modalidade
     const modal = l.tipo==="receita" && VENDA_TAXA[l.categoria];
-    if(modal&&pctEm(modal,compOf(l))==null){ (semTaxa[modal]=semTaxa[modal]||new Set()).add(compOf(l)); }
-    if(modal){ const pc=taxaPct(modal,compOf(l)); if(pc){ const fee=-Math.round(l.valor*pc/100); const tid="_tx_"+modal;
+    if(modal&&pctEmLoja(l.centro,modal,compOf(l))==null){ const kk=(l.centro||"")+"|"+modal; (semTaxa[kk]=semTaxa[kk]||new Set()).add(compOf(l)); }
+    if(modal){ const pc=taxaPct(modal,compOf(l),l.centro); if(pc){ const fee=-Math.round(l.valor*pc/100); const tid="_tx_"+modal;
       byCat[tid]=byCat[tid]||{g:"deducao",m:{},t:0,it:[]}; byCat[tid].m[k]=(byCat[tid].m[k]||0)+fee; byCat[tid].t+=fee; byCat[tid].it.push({l,k,v:fee,pc}); byCen[bc].gas+=-fee; } }
   }
   const gsum=(g,k)=>Object.values(byCat).filter(c=>c.g===g).reduce((a,c)=>a+(k?(c.m[k]||0):c.t),0);
@@ -1142,9 +1145,9 @@ function vDre(){
         ${(()=>{ const gs=DRE_LINHAS.filter(x=>x[0]==="grp").map(x=>x[1]); const todosF=gs.every(g=>(ui.dreFech||{})[g]), nenhumF=gs.every(g=>!(ui.dreFech||{})[g]);
           return `<div class="field"><span class="flabel">Exibir</span><div class="seg"><button data-act="dre-resumo" data-v="1" aria-pressed="${todosF}">Só os tópicos</button><button data-act="dre-resumo" data-v="0" aria-pressed="${nenhumF}">Detalhado</button></div></div>`; })()}
       </div>
-      ${(()=>{ const ks=Object.keys(d.semTaxa||{}); if(!ks.length) return ""; const nomeT=id=>{ const t=taxasAtuais().find(x=>x.id===id); return t?t.nome:id; };
+      ${(()=>{ const ks=Object.keys(d.semTaxa||{}); if(!ks.length) return ""; const nomeT=kk=>{ const [lj,id]=kk.split("|"); const p=TAXAS_PADRAO.find(x=>x.id===id); const n=/^voucher\d$/.test(id)?(taxasLojaLista(lojaBy(lj)).find(x=>x.id===id)||{}).nome:(p?p.nome:id); return `${cenNome(lj)||"Sem loja"}: ${n||id}`; };
         const faixa=set=>{ const a=[...set].sort(); return a.length===1?mlabel(a[0]):`${mlabel(a[0])} a ${mlabel(a[a.length-1])}`; };
-        return `<div class="banner lib-banner tx-falta"><b>Taxa de cartão não descontada:</b> há vendas sem taxa cadastrada para o mês da venda — ${ks.map(k=>`<b>${esc(nomeT(k))}</b> (${esc(faixa(d.semTaxa[k]))})`).join(", ")}. Se a modalidade não tem tarifa, cadastre 0. ${isAdm()||nivel("config")>=2?`<button class="btn sm pri" data-act="ir-taxas" data-mes="${esc([...d.semTaxa[ks[0]]].sort()[0])}">Cadastrar em Minhas taxas</button>`:"Peça ao master do franqueado para cadastrar em Minhas taxas."}</div>`; })()}
+        return `<div class="banner lib-banner tx-falta"><b>Taxa de cartão não descontada:</b> há vendas sem taxa cadastrada para o mês da venda — ${ks.map(k=>`<b>${esc(nomeT(k))}</b> (${esc(faixa(d.semTaxa[k]))})`).join(", ")}. As taxas ficam no cadastro de cada loja (Lojas → abrir a loja). Se a modalidade não tem tarifa, cadastre 0. ${isAdm()||nivel("config")>=2?`<button class="btn sm pri" data-act="edit-loja" data-id="${esc(ks[0].split("|")[0])}">Cadastrar na loja</button>`:"Peça ao master do franqueado para cadastrar as taxas no cadastro da loja."}</div>`; })()}
       ${(()=>{ if(ui.d.regime!=="caixa") return ""; const ab=S.lanc.filter(l=>!l.pago&&inCC(l,ui.cc)&&compOf(l)>=ui.d.ini&&compOf(l)<=ui.d.fim&&(catBy(l.categoria)||{}).grupo!=="invest");
         if(!ab.length) return ""; const tot=ab.reduce((a,l)=>a+(l.tipo==="receita"?l.valor:-l.valor),0);
         return `<div class="banner info">No regime de <b>caixa</b> só aparece o que já foi pago ou recebido. Há <b>${ab.length} lançamento(s) em aberto</b> nesse período (saldo ${fmt(tot)}) que não entram aqui. <button class="btn sm" data-f="d.regime" data-v="competencia">Ver em competência</button></div>`; })()}
@@ -1857,13 +1860,14 @@ function lojaForm(x){
       <div class="row">${F("telefone","Telefone","tel")}${F("email","E-mail","email")}</div>
       <label class="chkline" style="padding-top:0"><input type="checkbox" id="lj_ativa" ${x.ativa===false?"":"checked"}> Loja ativa (em operação)</label>
       <p class="note" style="margin:-4px 0 0">O aniversário da loja aparece todo ano na agenda, na data de inauguração.</p>
+      ${taxasLojaHTML(isNew?null:x)}
       ${autoLojaHTML(x.auto)}
       ${usos?`<p class="note" style="margin:0">Usada em ${usos} lançamento(s)/compromisso(s) — por isso não pode ser excluída.</p>`:""}
       <div class="err" id="ljErr" role="alert"></div>
       <div class="foot"><div>${!isNew&&!usos?`<button type="button" class="btn danger" id="ljDel">Excluir</button>`:""}</div>
         <div><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn pri">${isNew?"Cadastrar loja":"Salvar alterações"}</button></div></div>
     </form>`,false,()=>{
-      bindAutoLoja();
+      bindAutoLoja(); bindTaxasLoja(isNew?null:x);
       const bd=$("#ljDel"); if(bd) bd.addEventListener("click",()=>confirmBtn(bd,"Confirmar exclusão",async()=>{ try{ await del("lojas",x.id); if(ui.cc===x.id){ ui.cc=""; saveUi(); } closeModal(); toast("Loja excluída"); }catch(e){} }));
       $("#fLj").addEventListener("submit",async e=>{ e.preventDefault();
         const d={}; ["condominio","cnpj","sindico","inauguracao","endereco","telefone","email"].forEach(k=>d[k]=$("#lj_"+k).value.trim()); d.ativa=$("#lj_ativa").checked;
@@ -1874,15 +1878,97 @@ function lojaForm(x){
         if(d.cnpj) d.cnpj=fmtDoc(d.cnpj);
         if(d.email&&!/^\S+@\S+\.\S+$/.test(d.email)){ err.textContent="E-mail inválido."; $("#lj_email").focus(); return; }
         const au=lerAutoLoja(err); if(!au) return; d.auto=au;
+        const tx=lerTaxasLoja(isNew?null:x,err); if(!tx) return; const txMud=tx._mud||[], txEsc=tx._esc, txMes=tx._mes; delete tx._mud; delete tx._esc; delete tx._mes; Object.assign(d,tx);
         try{
           if(isNew){ const id=newId("lojas"); await save("lojas",id,{...d,codigo:proxCodigo(S.lojas,"L",3),criado:new Date().toISOString()}); }
           else await save("lojas",x.id,{...x,...d});
+          if(typeof txMud!=="undefined"&&txMud.length) diario("Taxas da loja alteradas",`${d.condominio}: ${txMud.join(" · ")} — ${txEsc==="so"?"somente "+mlabel(txMes):txEsc==="adiante"?"de "+mlabel(txMes)+" em diante":"todos os meses"}`,{cat:"alteracao"});
           closeModal(); toast(isNew?"Loja cadastrada":"Loja atualizada"); agendarAuto();
         }catch(ex){}
       });
     });
 }
 
+/* ---------- taxas de venda por loja (com histórico por mês) ---------- */
+const histLojaRaw = lj => (lj&&lj.taxasHist&&typeof lj.taxasHist==="object"&&Object.keys(lj.taxasHist).length)?lj.taxasHist:null;
+let _hlK=null,_hlV={};
+function histTaxasLoja(lojaId){
+  if(_hlK!==S.lojas||_hlV.__cfg!==S.cfg){ _hlK=S.lojas; _hlV={__cfg:S.cfg}; }
+  if(_hlV[lojaId]) return _hlV[lojaId];
+  const h=histLojaRaw(lojaBy(lojaId)); let out;
+  if(!h) out=histTaxas();   // loja ainda sem taxas próprias: usa as do franqueado (Minhas taxas antigas)
+  else { out={}; Object.keys(h).forEach(k=>{ out[k]=(Array.isArray(h[k])?h[k]:[]).map(e=>({desde:e.desde,pct:e.pct==null?null:+e.pct})).sort((a,b)=>a.desde.localeCompare(b.desde)); }); }
+  return (_hlV[lojaId]=out);
+}
+function pctEmLoja(lojaId,modal,k){ return pctNaLista(histTaxasLoja(lojaId)[modal],k); }
+function taxasLojaLista(lj){
+  const base=(lj&&Array.isArray(lj.taxas)&&lj.taxas.length)?lj.taxas:((S.cfg&&Array.isArray(S.cfg.taxas))?S.cfg.taxas:[]);
+  const out=TAXAS_PADRAO.map(p=>({...p,nome:p.tipo==="voucher"?((base.find(x=>x.id===p.id)||{}).nome||p.nome):p.nome}));
+  base.filter(x=>!TAXAS_PADRAO.some(p=>p.id===x.id)).forEach(x=>out.push({id:x.id,nome:x.nome,tipo:"extra"}));
+  return out;
+}
+function nomeVoucher(id){ const nomes=new Set(); const padrao="Voucher "+id.slice(7);
+  S.lojas.forEach(lj=>{ const t=(Array.isArray(lj.taxas)?lj.taxas:[]).find(x=>x.id===id); if(t&&t.nome&&normTxt(t.nome)!==normTxt(padrao)) nomes.add(t.nome); });
+  if(!nomes.size){ const t=((S.cfg&&S.cfg.taxas)||[]).find(x=>x.id===id); if(t&&t.nome&&normTxt(t.nome)!==normTxt(padrao)) nomes.add(t.nome); }
+  return nomes.size===1?[...nomes][0]:""; }
+function linhasTaxasLoja(lj,k){
+  const hist=lj?histTaxasLoja(lj.id):histTaxas(); const lista=lj?taxasLojaLista(lj):taxasLojaLista(null);
+  return lista.map(t=>{ const v=pctNaLista(hist[t.id],k); const arr=hist[t.id]||[]; const prox=arr.find(e=>e.desde>k); let e=null; for(const x of arr){ if(x.desde<=k) e=x; }
+    const vig=e?(e.desde==="0000-00"?"todos os meses anteriores":"desde "+mlabel(e.desde)):"sem taxa neste mês";
+    return `<div class="txl-row" data-id="${esc(t.id)}" data-tipo="${t.tipo}" data-orig="${v==null?"":esc(String(v))}" data-hist="${arr.some(x=>x.pct!=null)?1:0}">
+      ${t.tipo==="fixa"?`<b class="txl-nome">${esc(t.nome)}</b>`:`<input class="txl-nome" value="${esc(t.nome)}" placeholder="${t.tipo==="voucher"?"Ex.: Alelo, Ticket, VR":"Nome da forma de venda"}" aria-label="Nome">`}
+      <div class="tx-pct"><input class="txl-pct" inputmode="decimal" value="${esc(pctTxt(v))}" placeholder="0,00" aria-label="Taxa de ${esc(t.nome)} em %"><span>%</span></div>
+      <span class="meta">${vig}${prox?` · muda em ${mlabel(prox.desde)}`:""}</span>
+      ${t.tipo==="extra"?`<button type="button" class="icon-btn txl-del" aria-label="Remover">✕</button>`:"<span></span>"}</div>`; }).join("");
+}
+function taxasLojaHTML(lj){
+  const k=mkey(HOJE);
+  return `<div class="sect">Taxas de venda (maquininha)</div>
+    <div class="auto-box" id="txLoja">
+      <div class="row"><div class="field"><label for="tx_mes">Mês de referência</label><input type="month" id="tx_mes" value="${k}"></div>
+        <p class="note" style="align-self:end;margin:0 0 6px">Mostra as taxas que valiam nesse mês. Para registrar uma mudança, escolha o mês em que ela começou.</p></div>
+      ${lj&&!histLojaRaw(lj)?`<p class="note" style="margin:0">Preenchido com as taxas que o franqueado já usava. Ao salvar, elas passam a ser desta loja.</p>`:""}
+      <div id="tx_rows">${linhasTaxasLoja(lj,k)}</div>
+      <button type="button" class="btn sm" id="tx_add" style="align-self:flex-start">+ Nova taxa de venda</button>
+      <div id="tx_esc" hidden>
+        <div class="flabel" style="margin-top:8px">Até onde vale a mudança de taxa?</div>
+        <div class="esc-ops">
+          <label class="esc-op"><input type="radio" name="txEscL" value="so"><span><b>Somente <span class="txm"></span></b><small>Os outros meses continuam com a taxa anterior.</small></span></label>
+          <label class="esc-op"><input type="radio" name="txEscL" value="adiante" checked><span><b>De <span class="txm"></span> em diante</b><small>Os meses anteriores ficam como estão.</small></span></label>
+          <label class="esc-op"><input type="radio" name="txEscL" value="todos"><span><b>Todos os meses, inclusive os anteriores</b><small>Recalcula o DRE de todos os meses desta loja com a nova taxa.</small></span></label>
+        </div>
+        <p class="note" id="tx_prim" style="margin:4px 0 0" hidden>Primeiro cadastro de alguma taxa desta loja: “Todos os meses” já vem marcado.</p>
+      </div>
+      <p class="note" style="margin:6px 0 0">O sistema calcula a taxa sobre as vendas de cada modalidade desta loja, com a taxa do mês da venda, e lança como dedução no DRE.</p>
+    </div>`;
+}
+function bindTaxasLoja(lj){
+  const box=$("#txLoja"); if(!box) return; let mexeu=false;
+  const MES=()=>{ const k=$("#tx_mes").value||mkey(HOJE); return MESES_L[+k.slice(5)-1]+"/"+k.slice(0,4); };
+  const checa=()=>{ let mud=false, prim=true;
+    box.querySelectorAll(".txl-row").forEach(r=>{ const v=numPct(r.querySelector(".txl-pct").value); const o=r.dataset.orig===""?null:+r.dataset.orig; if((v==null?null:v)!==o&&!(v!=null&&isNaN(v))){ mud=true; if(r.dataset.hist==="1") prim=false; } });
+    $("#tx_esc").hidden=!mud; $("#tx_prim").hidden=!(mud&&prim); box.querySelectorAll(".txm").forEach(x=>x.textContent=MES());
+    if(mud&&!mexeu){ box.querySelector(`input[name="txEscL"][value="${prim?"todos":"adiante"}"]`).checked=true; } mexeu=mud; };
+  box.addEventListener("input",e=>{ if(e.target.classList.contains("txl-pct")) checa(); });
+  box.addEventListener("click",e=>{ const d=e.target.closest(".txl-del"); if(d){ d.closest(".txl-row").remove(); checa(); } });
+  $("#tx_add").addEventListener("click",()=>{ const div=document.createElement("div"); div.innerHTML=`<div class="txl-row" data-id="tx_${rid()}" data-tipo="extra" data-orig="" data-hist="0"><input class="txl-nome" placeholder="Nome da forma de venda" aria-label="Nome"><div class="tx-pct"><input class="txl-pct" inputmode="decimal" placeholder="0,00"><span>%</span></div><span class="meta">nova</span><button type="button" class="icon-btn txl-del" aria-label="Remover">✕</button></div>`; $("#tx_rows").appendChild(div.firstChild); });
+  $("#tx_mes").addEventListener("change",e=>{ if(mexeu&&!confirm("Há taxas alteradas e não salvas. Trocar o mês e descartar?")){ return; } $("#tx_rows").innerHTML=linhasTaxasLoja(lj,e.target.value||mkey(HOJE)); mexeu=false; checa(); });
+}
+function lerTaxasLoja(lj,err){
+  const box=$("#txLoja"); if(!box) return {};
+  const k=$("#tx_mes").value||mkey(HOJE); const hist=JSON.parse(JSON.stringify(lj?histTaxasLoja(lj.id):histTaxas()));
+  const r=document.querySelector('input[name="txEscL"]:checked'); const escopo=r?r.value:"adiante"; const lista=[]; const mud=[];
+  for(const row of box.querySelectorAll(".txl-row")){
+    const id=row.dataset.id, tipo=row.dataset.tipo; const nEl=row.querySelector("input.txl-nome"); const nome=nEl?nEl.value.trim():row.querySelector(".txl-nome").textContent.trim();
+    if(!nome){ err.textContent="Dê um nome para todas as formas de venda."; return null; }
+    const v=numPct(row.querySelector(".txl-pct").value); if(v!==null&&(isNaN(v)||v<0||v>100)){ err.textContent=`Taxa inválida em "${nome}". Use um número entre 0 e 100, ex.: 3,19`; return null; }
+    const o=row.dataset.orig===""?null:+row.dataset.orig; if(v!==o){ hist[id]=escopoNaLista(hist[id],k,v,escopo); mud.push(`${nome}: ${o==null?"sem taxa":pctTxt(o)+"%"} → ${v==null?"sem taxa":pctTxt(v)+"%"}`); }
+    lista.push({id,nome,tipo});
+  }
+  Object.keys(hist).forEach(id=>{ if(!lista.some(x=>x.id===id)&&!TAXAS_PADRAO.some(p=>p.id===id)) delete hist[id]; });
+  const taxas=lista.map(({id,nome})=>({id,nome,pct:pctNaLista(hist[id],mkey(HOJE))}));
+  return {taxasHist:hist,taxas,_mud:mud,_esc:escopo,_mes:k};
+}
 /* ---------- royalties e cashback automáticos ---------- */
 const fmtIn = c => (Number(c)/100).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
 // ---- dias úteis: fins de semana e feriados nacionais (bancários) ----
