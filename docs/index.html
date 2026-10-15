@@ -1079,7 +1079,7 @@ function vDre(){
   const d=dreCalc(ui.d.ini,ui.d.fim,ui.d.regime,ui.cc);
   const ms=d.meses; const RL=d.tot.RL;
   const cell=v=>`<td class="r num ${v<0?'neg':''}">${v?fmt(v):"—"}</td>`;
-  ui.dreFech=ui.dreFech||{};
+  if(!ui.dreFech){ ui.dreFech={}; DRE_LINHAS.filter(x=>x[0]==="grp").forEach(x=>ui.dreFech[x[1]]=true); }   // abre só com os tópicos
   const body=DRE_LINHAS.map(([cls,key,label])=>{
     const cats=cls==="grp"?dreCats(d,key):[]; const fech=cls==="grp"&&!!ui.dreFech[key];
     let h = cls==="grp"&&cats.length
