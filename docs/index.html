@@ -470,6 +470,7 @@ table.dre tr.dre-grp{cursor:pointer}table.dre tr.dre-grp:hover td{background:var
 .tag.t-auto{background:#E2F4FF;color:#0B4F7A;font-weight:700;font-size:10.5px}
 @media (max-width:640px){.fx-row{grid-template-columns:auto 1fr auto 1fr}.fx-row .fx-pct{grid-column:1/3}}
 .tag.t-ajust{background:#FFF4D6;color:#8A5A00}
+.au-linha{margin-top:4px}.au-linha .field input{max-width:180px}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -895,7 +896,7 @@ function bannersBase(){
   if([S.lanc,S.forn,S.ag,S.lojas].some(a=>a.some(x=>x.exemplo))) b+=`<div class="banner info">Há dados de exemplo (marcados com <span class="tag ex">exemplo</span>). Quando quiser começar de verdade, remova-os em Configurações.</div>`;
   return b;
 }
-const autoTag = l => (l&&(l.auto==="royalty"||l.auto==="cashback"))?(autoManual(l)?' <span class="tag t-auto t-ajust">ajustado</span>':' <span class="tag t-auto">automático</span>'):"";
+const autoTag = l => (l&&AUTO_TIPOS.includes(l.auto))?(autoManual(l)?(l.auto==="energia"&&l.autoValor===0?' <span class="tag t-auto">preenchido</span>':' <span class="tag t-auto t-ajust">ajustado</span>'):(l.valorPendente?' <span class="tag t-auto">a preencher</span>':' <span class="tag t-auto">automático</span>')):"";
 const exTag = x => (x.exemplo ? ' <span class="tag ex">exemplo</span>' : "")+autoTag(x);
 const lojaTag = id => id ? `<span class="tag loja">${esc(cenNome(id)||"—")}</span>` : '<span class="note">—</span>';
 
@@ -1604,12 +1605,14 @@ function lancForm(l,tipoDefault){
         :!isNew&&grp.length>1?`<div class="scope-box"><span class="flabel">Salvar alteração em:</span><div class="scope-btns"><button type="submit" class="btn" data-scope="one">Só nesta parcela</button><button type="submit" class="btn pri" data-scope="all">Todas as parcelas (${grp.length})</button></div></div>`
         :`<div class="scope-box" style="justify-content:flex-end"><button type="submit" class="btn pri">${isNew?"Salvar lançamento":"Salvar alterações"}</button></div>`}
     </form>`,true,m=>{
-      if(l.auto==="royalty"||l.auto==="cashback"){ ["#lCat","#lCen"].forEach(q=>{ const el=$(q); if(el) el.disabled=true; });
-        const f=$("#fL"), nome=l.auto==="royalty"?"royalties":"cashback", calc=calcAuto(l);
+      if(AUTO_TIPOS.includes(l.auto)){ ["#lCat","#lCen"].forEach(q=>{ const el=$(q); if(el) el.disabled=true; });
+        const f=$("#fL"), nome=AUTO_NOME[l.auto], calc=calcAuto(l); const enVar=l.auto==="energia"&&(lojaBy(l.centro)?.auto?.ener?.tipo==="var");
         if(f) f.insertAdjacentHTML("afterbegin", autoManual(l)
-          ? `<div class="banner lib-banner" style="margin:0"><b>Valor ajustado manualmente</b> para este mês — não é mais recalculado. O cálculo automático daria <b>${calc==null?"—":fmt(calc)}</b>. ${l.pago?"":`<button type="button" class="btn sm" id="lAutoVolta">Voltar ao cálculo automático</button>`}</div>`
+          ? (enVar ? `<div class="banner info" style="margin:0">Energia variável — valor <b>preenchido</b> para este mês.</div>`
+              : `<div class="banner lib-banner" style="margin:0"><b>Valor ajustado manualmente</b> para este mês — não é mais recalculado. O valor automático seria <b>${calc==null?"—":fmt(calc)}</b>. ${l.pago?"":`<button type="button" class="btn sm" id="lAutoVolta">Voltar ao valor automático</button>`}</div>`)
+          : enVar ? `<div class="banner info" style="margin:0"><b>Energia variável</b>: digite o valor da conta deste mês e salve. Os outros meses não mudam.</div>`
           : `<div class="banner info" style="margin:0">Lançamento <b>automático</b> (${nome}): ${esc(l.obs||"")} ${l.pago?"Já foi pago, então não muda mais.":"Você pode <b>ajustar o valor ou o vencimento deste mês</b> aqui; o valor ajustado deixa de ser recalculado. A regra fica no cadastro da loja (Lojas)."}</div>`);
-        const bv=$("#lAutoVolta"); if(bv) bv.addEventListener("click",()=>confirmBtn(bv,`Confirmar: voltar para ${calc==null?"—":fmt(calc)}`,async()=>{ try{ await save("lanc",l.id,{...l,valor:calc,autoValor:calc,venc:l.autoVenc||l.venc}); diario("Royalties/cashback: voltou ao automático",`#${l.numero||""} ${l.descricao} → ${fmt(calc)}`,{cat:"alteracao"}); closeModal(); toast("Voltou ao cálculo automático"); agendarAuto(); }catch(e){} })); }
+        const bv=$("#lAutoVolta"); if(bv) bv.addEventListener("click",()=>confirmBtn(bv,`Confirmar: voltar para ${calc==null?"—":fmt(calc)}`,async()=>{ try{ await save("lanc",l.id,{...l,valor:calc,autoValor:calc,venc:l.autoVenc||l.venc,valorPendente:false}); diario("Royalties/cashback: voltou ao automático",`#${l.numero||""} ${l.descricao} → ${fmt(calc)}`,{cat:"alteracao"}); closeModal(); toast("Voltou ao cálculo automático"); agendarAuto(); }catch(e){} })); }
       const T=()=>$("#lTipo").value;
       m.querySelectorAll("[data-tp]").forEach(b=>b.addEventListener("click",()=>{
         const t=b.dataset.tp; $("#lTipo").value=t; m.querySelectorAll("[data-tp]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.tp===t));
@@ -1898,7 +1901,8 @@ const reaisCent = v => { if(v==null||String(v).trim()==="") return null; let t=S
 function autoLojaHTML(a){
   a=a||{}; const roy=a.roy||{on:true,pct:5}; const cb=a.cb||{tipo:"nao"}; const fx=(cb.faixas&&cb.faixas.length)?cb.faixas:[{de:0,ate:1000000,pct:3},{de:1000001,ate:2000000,pct:5}];
   const linha=(f,i)=>`<div class="fx-row" data-i="${i}"><span class="note">de R$</span><input class="fx-de" inputmode="decimal" value="${f.de==null?"":esc(fmtIn(f.de))}" aria-label="Faturamento de"><span class="note">até R$</span><input class="fx-ate" inputmode="decimal" value="${f.ate==null?"":esc(fmtIn(f.ate))}" placeholder="acima" aria-label="Faturamento até"><input class="fx-pct" inputmode="decimal" value="${esc(pctTxt(f.pct))}" aria-label="Percentual"><span>%</span><button type="button" class="icon-btn fx-del" aria-label="Remover faixa">✕</button></div>`;
-  return `<div class="sect">Royalties e cashback (lançados automaticamente)</div>
+  const mens=a.mens||{on:false,valor:null,dia:7}; const ener=a.ener||{tipo:"nao",valor:null,dia:15};
+  return `<div class="sect">Lançamentos automáticos da loja</div>
     <div class="auto-box">
       <label class="chkline" style="padding-top:0"><input type="checkbox" id="au_roy" ${roy.on===false?"":"checked"}> Calcular <b>royalties</b> sobre o faturamento da loja</label>
       <div class="tx-pct" style="margin:-2px 0 6px 26px"><input id="au_roy_pct" inputmode="decimal" value="${esc(pctTxt(roy.pct??5))}" aria-label="Percentual de royalties"><span>% do faturamento</span></div>
@@ -1910,9 +1914,20 @@ function autoLojaHTML(a){
         <div id="au_fx_lista">${fx.map(linha).join("")}</div>
         <button type="button" class="btn sm" id="au_fx_add" style="margin-top:6px">+ Adicionar faixa</button>
         <p class="note" style="margin:6px 0 0">O faturamento total do mês cai em uma faixa, e a % dela vale sobre o faturamento inteiro. Deixe "até" em branco na última faixa para "acima de".</p></div>
-      <div class="row" style="margin-top:10px"><div class="field"><label for="au_dia">Vencimento (dia do mês seguinte)</label><input id="au_dia" type="number" min="1" max="28" value="${esc(a.dia||7)}"></div>
+      <div class="row" style="margin-top:10px"><div class="field"><label for="au_dia">Vencimento de royalties e cashback (dia do mês seguinte)</label><input id="au_dia" type="number" min="1" max="28" value="${esc(a.dia||7)}"></div>
         <div class="field"><label for="au_desde">Calcular a partir de</label><input id="au_desde" type="month" value="${esc(a.desde||mkey(HOJE))}"></div></div>
-      <p class="note" style="margin:4px 0 0">Se o dia do vencimento cair em sábado, domingo ou feriado nacional, o sistema usa o próximo dia útil. Base: soma das vendas da loja no mês (crédito, crédito com antecipação, débito, Pix e vouchers). Os lançamentos aparecem em Contas a pagar, Fluxo e DRE e se atualizam enquanto estiverem em aberto; depois de pagos, não mudam mais.</p>
+      <div class="flabel" style="margin-top:12px">Mensalidade de sistema</div>
+      <label class="chkline" style="padding-top:0"><input type="checkbox" id="au_mens" ${mens.on?"checked":""}> Lançar todo mês (valor fixo)</label>
+      <div class="row au-linha" id="au_mens_box" ${mens.on?"":"hidden"}><div class="field"><label for="au_mens_v">Valor mensal (R$)</label><input id="au_mens_v" inputmode="decimal" value="${mens.valor!=null?esc(fmtIn(mens.valor)):""}" placeholder="0,00"></div>
+        <div class="field"><label for="au_mens_d">Vence todo dia</label><input id="au_mens_d" type="number" min="1" max="28" value="${esc(mens.dia||7)}"></div></div>
+      <div class="flabel" style="margin-top:12px">Energia (consumo)</div>
+      <div class="seg" id="au_en_seg" style="align-self:flex-start">${[["nao","Não tem energia"],["fixa","Fixa"],["var","Variável"]].map(([v,t])=>`<button type="button" data-en="${v}" aria-pressed="${(ener.tipo||"nao")===v}">${t}</button>`).join("")}</div>
+      <input type="hidden" id="au_en" value="${esc(ener.tipo||"nao")}">
+      <div class="row au-linha" id="au_en_box" style="margin-top:8px" ${ener.tipo==="nao"||!ener.tipo?"hidden":""}>
+        <div class="field" id="au_en_vbox" ${ener.tipo==="fixa"?"":"hidden"}><label for="au_en_v">Valor mensal (R$)</label><input id="au_en_v" inputmode="decimal" value="${ener.valor!=null?esc(fmtIn(ener.valor)):""}" placeholder="0,00"></div>
+        <div class="field"><label for="au_en_d">Vence todo dia</label><input id="au_en_d" type="number" min="1" max="28" value="${esc(ener.dia||15)}"></div></div>
+      <p class="note" id="au_en_var" style="margin:2px 0 0" ${ener.tipo==="var"?"":"hidden"}>Variável: todo mês aparece o lançamento “Energia” em Contas a pagar com o valor em branco, para você digitar a conta do mês.</p>
+      <p class="note" style="margin:8px 0 0">Mensalidade e energia: o vencimento é no próprio mês do lançamento. Todos os vencimentos que caírem em sábado, domingo ou feriado nacional vão para o próximo dia útil. Royalties e cashback — base: soma das vendas da loja no mês (crédito, crédito com antecipação, débito, Pix e vouchers). Os lançamentos aparecem em Contas a pagar, Fluxo e DRE e se atualizam enquanto estiverem em aberto; depois de pagos, não mudam mais.</p>
     </div>`;
 }
 function bindAutoLoja(){
@@ -1922,6 +1937,8 @@ function bindAutoLoja(){
     const d=document.createElement("div"); d.innerHTML=`<div class="fx-row"><span class="note">de R$</span><input class="fx-de" inputmode="decimal" value="${deAnt!=null&&!isNaN(deAnt)?fmtIn(deAnt+1):""}"><span class="note">até R$</span><input class="fx-ate" inputmode="decimal" placeholder="acima"><input class="fx-pct" inputmode="decimal" placeholder="0,00"><span>%</span><button type="button" class="icon-btn fx-del" aria-label="Remover faixa">✕</button></div>`;
     $("#au_fx_lista").appendChild(d.firstChild); });
   $("#au_fx_lista").addEventListener("click",e=>{ const b=e.target.closest(".fx-del"); if(b) b.closest(".fx-row").remove(); });
+  $("#au_mens").addEventListener("change",e=>{ $("#au_mens_box").hidden=!e.target.checked; });
+  box.querySelectorAll("[data-en]").forEach(b=>b.addEventListener("click",()=>{ const v=b.dataset.en; $("#au_en").value=v; box.querySelectorAll("[data-en]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.en===v)); $("#au_en_box").hidden=v==="nao"; $("#au_en_vbox").hidden=v!=="fixa"; $("#au_en_var").hidden=v!=="var"; }));
 }
 function lerAutoLoja(err){
   const on=$("#au_roy").checked; const rp=pctNum($("#au_roy_pct").value);
@@ -1939,12 +1956,21 @@ function lerAutoLoja(err){
     for(let i=1;i<fx.length;i++){ if(fx[i-1].ate==null||fx[i].de<=fx[i-1].ate){ err.textContent="As faixas de cashback estão se sobrepondo. Confira os valores."; return null; } }
     cb.faixas=fx; }
   const dia=Math.min(28,Math.max(1,parseInt($("#au_dia").value)||7)); const desde=$("#au_desde").value||mkey(HOJE);
-  return {roy:{on,pct:on?rp:(isNaN(rp)?5:rp)},cb,dia,desde};
+  const diaDe=id=>Math.min(28,Math.max(1,parseInt($(id).value)||10));
+  const mens={on:$("#au_mens").checked,valor:null,dia:Math.min(28,Math.max(1,parseInt($("#au_mens_d").value)||7))};
+  if(mens.on){ const v=reaisCent($("#au_mens_v").value); if(v==null||isNaN(v)||v<=0){ err.textContent="Informe o valor mensal da mensalidade de sistema."; $("#au_mens_v").focus(); return null; } mens.valor=v; }
+  const ener={tipo:$("#au_en").value||"nao",valor:null,dia:Math.min(28,Math.max(1,parseInt($("#au_en_d").value)||15))};
+  if(ener.tipo==="fixa"){ const v=reaisCent($("#au_en_v").value); if(v==null||isNaN(v)||v<=0){ err.textContent="Informe o valor mensal fixo da energia."; $("#au_en_v").focus(); return null; } ener.valor=v; }
+  return {roy:{on,pct:on?rp:(isNaN(rp)?5:rp)},cb,dia,desde,mens,ener};
 }
+const AUTO_TIPOS=["royalty","cashback","mensalidade","energia"];
+const AUTO_NOME={royalty:"royalties",cashback:"cashback",mensalidade:"mensalidade de sistema",energia:"energia"};
 const autoManual = l => !!l && l.autoValor!=null && l.valor!==l.autoValor;
 function calcAuto(l){ // quanto o cálculo automático daria para este lançamento
   const lj=lojaBy(l.centro); const a=lj&&lj.auto; if(!a) return null; const m=l.competencia;
   const b=S.lanc.filter(x=>!x.auto&&x.tipo==="receita"&&x.centro===lj.id&&VENDAS_AUTO.includes(x.categoria)&&compOf(x)===m).reduce((s,x)=>s+x.valor,0);
+  if(l.auto==="mensalidade") return (a.mens&&a.mens.on)?a.mens.valor:0;
+  if(l.auto==="energia") return (a.ener&&a.ener.tipo==="fixa")?a.ener.valor:0;
   if(l.auto==="royalty") return (a.roy&&a.roy.on!==false)?Math.round(b*(+a.roy.pct||0)/100):0;
   return Math.round(b*pctCashback(a.cb,b)/100);
 }
@@ -1957,28 +1983,37 @@ async function sincAuto(){
   if(nivel("lanc")<2) return; if(S.claims.papel==="master_rede"&&!S.liberado) return; if(S.claims.papel==="observador") return;
   autoBusy=true;
   try{
-    const desejo={}; const chave=(t,lj,m)=>`auto_${S.tid}_${t}_${lj}_${m.replace("-","")}`;
-    for(const lj of S.lojas){ const a=lj.auto; if(!a) continue;
-      const base={}; S.lanc.forEach(l=>{ if(l.auto||l.tipo!=="receita"||l.centro!==lj.id||!VENDAS_AUTO.includes(l.categoria)) return; const m=compOf(l); if(m&&m>=(a.desde||"0000-00")) base[m]=(base[m]||0)+l.valor; });
+    const desejo={}; const chave=(t,lj,m)=>`auto_${S.tid}_${t}_${lj}_${m.replace("-","")}`; const cur=mkey(HOJE);
+    for(const lj of S.lojas){ const a=lj.auto; if(!a) continue; const desde=a.desde||cur;
+      // royalties e cashback: pelas vendas do mês
+      const base={}; S.lanc.forEach(l=>{ if(l.auto||l.tipo!=="receita"||l.centro!==lj.id||!VENDAS_AUTO.includes(l.categoria)) return; const m=compOf(l); if(m&&m>=desde) base[m]=(base[m]||0)+l.valor; });
       for(const [m,b] of Object.entries(base)){ if(!b) continue;
         const venc=proxDiaUtil(`${addMonths(m,1)}-${pad(Math.min(28,a.dia||7))}`);
-        if(a.roy&&a.roy.on!==false&&+a.roy.pct>0){ const v=Math.round(b*a.roy.pct/100); if(v>0) desejo[chave("roy",lj.id,m)]={tipo:"roy",lj,m,v,pct:+a.roy.pct,base:b,venc}; }
-        const pc=pctCashback(a.cb,b); if(pc>0){ const v=Math.round(b*pc/100); if(v>0) desejo[chave("cb",lj.id,m)]={tipo:"cb",lj,m,v,pct:pc,base:b,venc}; }
-      } }
+        if(a.roy&&a.roy.on!==false&&+a.roy.pct>0){ const v=Math.round(b*a.roy.pct/100), pc=+a.roy.pct; if(v>0) desejo[chave("roy",lj.id,m)]={auto:"royalty",lj,m,v,venc,cat:"cop_royalties",forma:"Boleto",desc:`Royalties ${pctTxt(pc)}% — ${mlabel(m)}`,obs:`Calculado automaticamente: ${pctTxt(pc)}% sobre vendas de ${fmt(b)} (${cenNome(lj.id)}, ${mlabel(m)}).`,base:b,pct:pc}; }
+        const pc=pctCashback(a.cb,b); if(pc>0){ const v=Math.round(b*pc/100); if(v>0) desejo[chave("cb",lj.id,m)]={auto:"cashback",lj,m,v,venc,cat:"cop_cashback",forma:"Transferência",desc:`Cashback ao condomínio ${pctTxt(pc)}% — ${mlabel(m)}`,obs:`Calculado automaticamente: ${pctTxt(pc)}% sobre vendas de ${fmt(b)} (${cenNome(lj.id)}, ${mlabel(m)}).`,base:b,pct:pc}; }
+      }
+      // mensalidade e energia: todo mês, de "a partir de" até o mês seguinte (loja ativa)
+      if(lj.ativa!==false){
+        for(let m=desde; m<=addMonths(cur,1); m=addMonths(m,1)){
+          if(a.mens&&a.mens.on&&a.mens.valor>0) desejo[chave("mens",lj.id,m)]={auto:"mensalidade",lj,m,v:a.mens.valor,venc:proxDiaUtil(`${m}-${pad(a.mens.dia||7)}`),cat:"cop_sistema",forma:"Boleto",desc:`Mensalidade de sistema — ${mlabel(m)}`,obs:`Mensalidade fixa configurada na loja (${fmt(a.mens.valor)}/mês).`};
+          if(a.ener&&a.ener.tipo==="fixa"&&a.ener.valor>0) desejo[chave("ener",lj.id,m)]={auto:"energia",lj,m,v:a.ener.valor,venc:proxDiaUtil(`${m}-${pad(a.ener.dia||15)}`),cat:"cop_energia",forma:"Boleto",desc:`Energia — ${mlabel(m)}`,obs:`Energia fixa configurada na loja (${fmt(a.ener.valor)}/mês).`};
+          if(a.ener&&a.ener.tipo==="var") desejo[chave("ener",lj.id,m)]={auto:"energia",lj,m,v:0,pend:true,venc:proxDiaUtil(`${m}-${pad(a.ener.dia||15)}`),cat:"cop_energia",forma:"Boleto",desc:`Energia — ${mlabel(m)}`,obs:`Energia variável: digite o valor da conta deste mês.`};
+        }
+      }
+    }
     const col=S.db.collection(COL.lanc); let numero=proxNumero(); let mud=0;
     for(const [id,w] of Object.entries(desejo)){
       const ex=S.lanc.find(l=>l.id===id); if(ex&&ex.pago) continue;
-      if(autoManual(ex)) continue;                               // valor ajustado à mão: não recalcula este mês
+      if(autoManual(ex)) continue;                               // valor ajustado/preenchido à mão: não mexe neste mês
       const vencFinal = ex&&ex.autoVenc&&ex.venc&&ex.venc!==ex.autoVenc ? ex.venc : w.venc;   // vencimento trocado à mão: mantém
-      const nome=w.tipo==="roy"?"Royalties":"Cashback ao condomínio";
-      const desc=`${nome} ${pctTxt(w.pct)}% — ${mlabel(w.m)}`, obs=`Calculado automaticamente: ${pctTxt(w.pct)}% sobre vendas de ${fmt(w.base)} (${cenNome(w.lj.id)}, ${mlabel(w.m)}).`;
-      if(ex&&ex.valor===w.v&&ex.autoValor===w.v&&ex.descricao===desc&&ex.centro===w.lj.id&&ex.venc===vencFinal&&ex.autoVenc===w.venc) continue;
-      const doc={...(ex||{}),tipo:"despesa",descricao:desc,valor:w.v,categoria:w.tipo==="roy"?"cop_royalties":"cop_cashback",centro:w.lj.id,competencia:w.m,dataLanc:ultimoDia(+w.m.slice(0,4),+w.m.slice(5)),venc:vencFinal,autoValor:w.v,autoVenc:w.venc,pago:null,forma:ex&&ex.forma?ex.forma:(w.tipo==="roy"?"Boleto":"Transferência"),fornecedorId:ex?ex.fornecedorId||null:null,obs,
-        auto:w.tipo==="roy"?"royalty":"cashback",autoBase:w.base,autoPct:w.pct,numero:ex?ex.numero:numero++,parcela:"",criadoPor:ex?ex.criadoPor:"automatico",criado:ex?ex.criado:new Date().toISOString()};
+      if(ex&&ex.valor===w.v&&ex.autoValor===w.v&&ex.descricao===w.desc&&ex.centro===w.lj.id&&ex.venc===vencFinal&&ex.autoVenc===w.venc&&!!ex.valorPendente===!!w.pend) continue;
+      const doc={...(ex||{}),tipo:"despesa",descricao:w.desc,valor:w.v,categoria:w.cat,centro:w.lj.id,competencia:w.m,dataLanc:ultimoDia(+w.m.slice(0,4),+w.m.slice(5)),venc:vencFinal,autoValor:w.v,autoVenc:w.venc,
+        pago:null,forma:ex&&ex.forma?ex.forma:w.forma,fornecedorId:ex?ex.fornecedorId||null:null,obs:w.obs,valorPendente:!!w.pend,
+        auto:w.auto,autoBase:w.base??null,autoPct:w.pct??null,numero:ex?ex.numero:numero++,parcela:"",criadoPor:ex?ex.criadoPor:"automatico",criado:ex?ex.criado:new Date().toISOString()};
       delete doc.id; await col.doc(id).set(doc); mud++;
     }
-    for(const l of S.lanc){ if(l.auto&&!l.pago&&!autoManual(l)&&(l.auto==="royalty"||l.auto==="cashback")&&!desejo[l.id]){ await col.doc(l.id).delete(); mud++; } }
-    if(mud) diario("Royalties/cashback atualizados",`${mud} lançamento(s) automático(s) criado(s) ou ajustado(s) conforme as vendas`,{cat:"alteracao"});
+    for(const l of S.lanc){ if(AUTO_TIPOS.includes(l.auto)&&!l.pago&&!autoManual(l)&&!desejo[l.id]){ await col.doc(l.id).delete(); mud++; } }
+    if(mud) diario("Lançamentos automáticos atualizados",`${mud} lançamento(s) criado(s) ou ajustado(s) (royalties, cashback, mensalidade, energia)`,{cat:"alteracao"});
   }catch(e){ console.warn("auto",e&&e.message); }
   finally{ autoBusy=false; }
 }
