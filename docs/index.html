@@ -499,6 +499,11 @@ table.dre tr.dre-grp{cursor:pointer}table.dre tr.dre-grp:hover td{background:var
 .chat-in{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}.chat-in textarea{flex:1;resize:vertical;min-height:44px;font:inherit}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chat-acesso.ok{background:#12301e}:root:not([data-theme="light"]) .chat-acesso.alerta-acesso{background:#3A2F10}}
 @media (max-width:900px){.chat-wrap{grid-template-columns:1fr}.chat-lista{max-height:220px}}
+.ch-filtro{flex-wrap:wrap;margin-bottom:4px}.ch-filtro button{font-size:12px;padding:5px 9px}
+.ch-desc{padding:10px 14px;border-bottom:1px solid var(--line-2);font-size:13px;background:var(--surface)}.ch-desc .flabel{display:block;margin-bottom:2px}
+.stars{color:#F5A623;letter-spacing:1px;font-size:13px}.stars .off{color:var(--line)}
+.star-pick{display:flex;gap:4px}.star-pick button{font-size:30px;line-height:1;background:none;border:0;cursor:pointer;color:var(--line);padding:0 2px}.star-pick button.on,.star-pick button:hover{color:#F5A623}
+.lida{color:var(--accent);font-weight:700}.st-cancel{background:var(--line-2);color:var(--muted)}
 .sec-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 8px}
 .biz{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:20px}
 .kpi.fat{gap:10px}.fat-top{display:flex;justify-content:space-between;gap:12px}.fat-top>div{display:flex;flex-direction:column;gap:6px}
@@ -805,8 +810,9 @@ const VIEWS_T = [
 function viewsOk(){ if(plat()&&!S.tid){ return masterRede()?[["painelrede","Painel da rede"],["chamadosrede","Chamados"],["rede","Franqueados"],["planorede","Plano de contas da rede"],["sep"],["equiperede","Equipe da rede"],["diariorede","Diário da rede"],["meucad","Meu cadastro"]]:(ehBpo()?[["rede","Meus franqueados"],["sep"],["meucad","Meu cadastro"]]:[["rede","Franqueados"],["sep"],["meucad","Meu cadastro"]]); }
   const v=[]; if(S.tid) VIEWS_T.forEach(x=>{ if(["chamados","diario","usuarios"].includes(x[0])&&!(gestorFranq()||plat())) return; if(VIEW_MOD[x[0]]&&nivel(VIEW_MOD[x[0]])<1) return; if(x[0]==="sep"&&(!v.length||v[v.length-1][0]==="sep")) return; v.push(x); }); while(v.length&&v[v.length-1][0]==="sep") v.pop(); return v; }
 function renderNav(){
-  const VIEWS=viewsOk(); const pend=S.cham.filter(c=>c.status===(masterRede()?"aberto":"pendente")).length+(S.tenant&&naoLida(S.tenant.chat,plat()?"rede":"franq")?1:0);
-  const pendRede=S.tenants.filter(t=>naoLida(t.chat,"rede")).length;
+  const VIEWS=viewsOk(); const ladoT=plat()?"rede":"franq";
+  const pend=S.cham.filter(c=>(ladoT==="rede"&&c.status==="aberto")||chNaoLido(c,ladoT)||(ladoT==="franq"&&c.acesso&&c.acesso.status==="pedido"&&c.status==="atendimento")).length;
+  const pendRede=(S.chamRede||[]).filter(c=>c.status==="aberto"||(c.status==="atendimento"&&chNaoLido(c,"rede"))).length;
   $("#nav").innerHTML = VIEWS.map(v=> v[0]==="sep" ? '<div class="sep"></div>' :
     `<button data-nav="${v[0]}" ${ui.view===v[0]?'aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[v[0]]}</svg>${v[1]}${v[0]==="pagar"&&S.lanc.some(l=>!l.pago&&l.venc<HOJE&&l.tipo==="despesa")?`<span class="badge">${S.lanc.filter(l=>!l.pago&&l.venc<HOJE&&l.tipo==="despesa").length}</span>`:""}${v[0]==="receber"&&S.lanc.some(l=>!l.pago&&l.venc<HOJE&&l.tipo==="receita")?`<span class="badge">${S.lanc.filter(l=>!l.pago&&l.venc<HOJE&&l.tipo==="receita").length}</span>`:""}${v[0]==="chamados"&&pend?`<span class="badge">${pend}</span>`:""}${v[0]==="chamadosrede"&&pendRede?`<span class="badge">${pendRede}</span>`:""}</button>`).join("");
 }
@@ -1234,82 +1240,100 @@ async function moverSemLoja(btn){
     toast(`${x.lanc.length} lançamento(s) movido(s) para ${cenNome(dest)}`);
   }catch(e){ toast("Parou no meio — clique de novo para mover o restante."); btn.disabled=false; btn.textContent="Mover todos"; }
 }
-/* ---------- chamados: conversa com o franqueado ---------- */
-const naoLida = (ch,lado) => !!(ch&&ch.ultima&&ch.ultimaTipo==="msg"&&ch.ultimaDe&&ch.ultimaDe!==lado&&ch.ultima>(lado==="rede"?(ch.lidoRede||""):(ch.lidoFranq||"")));
-const ETQ={nao_resolvido:["Não resolvido","st-vencido"],resolvendo:["Resolvendo","st-vence"],resolvido:["Resolvido","st-pago"]};
-let UNSUB_CHAT=[]; S.chatMsgs=[]; S.chatCham=[]; S.msgs=[];
-function fecharChat(){ UNSUB_CHAT.forEach(f=>{ try{f();}catch(e){} }); UNSUB_CHAT=[]; }
-function abrirChat(tid){
-  ui.chatTid=tid; fecharChat(); S.chatMsgs=[]; S.chatCham=[]; render();
-  if(!tid) return;
-  UNSUB_CHAT.push(vigiar("mensagens",{tid,ordem:["criado",false],limite:600},rows=>{ const novo=rows.map(r=>({...r.data,id:r.id})).reverse(); const mudou=novo.length!==S.chatMsgs.length||(novo.length&&novo[novo.length-1].id!==S.chatMsgs[S.chatMsgs.length-1].id); S.chatMsgs=novo; if(mudou&&ui.view==="chamadosrede"){ render(); marcarLido(tid); } },"tid=eq."+tid));
-  UNSUB_CHAT.push(vigiar("chamados",{tid,limite:200},rows=>{ const novo=rows.map(r=>({...r.data,id:r.id})); const mudou=JSON.stringify(novo.map(c=>c.status+c.id))!==JSON.stringify((S.chatCham||[]).map(c=>c.status+c.id)); S.chatCham=novo; if(mudou&&ui.view==="chamadosrede") render(); },"tid=eq."+tid));
-}
-const chamadoPor = id => S.cham.concat(S.chatCham||[]).find(c=>c.id===id);
-let lidoT=null;
-function marcarLido(tid){ const t=tid===S.tid?S.tenant:S.tenants.find(x=>x.id===tid); const lado=(S.tid===tid&&!plat())?"franq":"rede"; if(!t||!naoLida(t.chat,lado)) return;
-  clearTimeout(lidoT); lidoT=setTimeout(()=>FB.sb.rpc("chat_lido",{p_tid:tid}).then(()=>atualizarTabelas("tenants")),600); }
+/* ---------- chamados: atendimento (franqueado abre, franqueadora aceita, bate-papo, acesso, nota) ---------- */
+S.chatMsgs=[]; S.msgs=[];
+let UNSUB_CHAT=[], _chatTid=null;
+function fecharChat(){ UNSUB_CHAT.forEach(f=>{ try{f();}catch(e){} }); UNSUB_CHAT=[]; _chatTid=null; }
+function vigiarMsgsRede(tid){ if(_chatTid===tid) return; fecharChat(); _chatTid=tid; S.chatMsgs=[];
+  UNSUB_CHAT.push(vigiar("mensagens",{tid,ordem:["criado",false],limite:1500},rows=>{ const novo=rows.map(r=>({...r.data,id:r.id})).reverse(); const mudou=novo.length!==S.chatMsgs.length||(novo.length&&novo[novo.length-1].id!==S.chatMsgs[S.chatMsgs.length-1].id); S.chatMsgs=novo; if(mudou&&ui.view==="chamadosrede") render(); },"tid=eq."+tid)); }
+const CH_ST={aberto:["Aguardando aceite","st-vence"],atendimento:["Em atendimento","st-aberto"],encerrado:["Encerrado","st-pago"],cancelado:["Cancelado","st-cancel"]};
+const chNaoLido = (c,lado) => !!(c&&c.ultima&&c.ultimaTipo==="msg"&&c.ultimaDe&&c.ultimaDe!==lado&&c.ultima>(lado==="rede"?(c.lidoRede||""):(c.lidoFranq||"")));
+const estrelas = n => n?`<span class="stars" title="${n} de 5">${"★".repeat(n)}<span class="off">${"★".repeat(5-n)}</span></span>`:"";
 function abrirAba(tid,leitura){ window.open(`${location.origin}${location.pathname}?t=${encodeURIComponent(tid)}${leitura?"&leitura=1":""}`,"_blank","noopener"); }
-async function enviarMsg(tid){
-  const el=$("#chatTxt"); const t=(el&&el.value||"").trim(); if(!t) return;
-  el.disabled=true;
-  const {error}=await FB.sb.from("mensagens").insert({tid,data:{texto:t,tipo:"msg"}});
-  el.disabled=false;
+const chamadoPor = id => S.cham.concat(S.chamRede||[]).find(c=>c.id===id);
+let lidoT={};
+function marcarLidoCh(c,lado){ if(!c||!chNaoLido(c,lado)) return; clearTimeout(lidoT[c.id]); lidoT[c.id]=setTimeout(()=>FB.sb.rpc("ch_lido",{p_id:c.id}).then(()=>atualizarTabelas("chamados")),500); }
+async function rpcCh(fn,args,ok,btn){ if(btn) btn.disabled=true; const {error}=await FB.sb.rpc(fn,args); if(btn) btn.disabled=false;
+  if(error){ toast(msgErro(error)); return false; } atualizarTabelas("chamados","mensagens","tenants","diario"); if(ok) toast(ok); return true; }
+async function enviarMsg(cid){
+  const c=chamadoPor(cid); const el=$("#chatTxt"); const t=(el&&el.value||"").trim(); if(!c||!t) return;
+  el.disabled=true; const {error}=await FB.sb.from("mensagens").insert({tid:c.tid||S.tid,data:{texto:t,tipo:"msg",chamadoId:cid}}); el.disabled=false;
   if(error){ toast("Não foi possível enviar: "+msgErro(error)); return; }
-  ui.chatDraft=ui.chatDraft||{}; ui.chatDraft[tid]=""; el.value=""; atualizarTabelas("mensagens","tenants"); el.focus();
+  ui.chatDraft=ui.chatDraft||{}; ui.chatDraft[cid]=""; el.value=""; atualizarTabelas("mensagens","chamados"); el.focus();
 }
-async function pedirAcessoChat(tid,btn){
-  const h=+(($("#chatPrazo")||{}).value||4); const txt=((ui.chatDraft||{})[tid]||"").trim();
-  btn.disabled=true;
-  const {error}=await FB.sb.rpc("abrir_chamado",{p_tid:tid,p_tipo:"Acesso para ajustes",p_descricao:txt.length>=5?txt:"Acesso solicitado pela conversa",p_horas:h});
-  btn.disabled=false;
-  if(error){ toast("Não foi possível pedir: "+msgErro(error)); return; }
-  ui.chatDraft=ui.chatDraft||{}; ui.chatDraft[tid]=""; atualizarTabelas("chamados","mensagens","tenants"); toast("Pedido de acesso enviado ao franqueado");
+function novoChamadoFr(){
+  openModal(`<h2>Abrir chamado</h2><form id="fNc" class="fcol" novalidate>
+    <div class="field"><label for="ncA">Assunto</label><input id="ncA" maxlength="120" placeholder="Ex.: DRE de outubro, taxa da maquininha, importação…"></div>
+    <div class="field"><label for="ncD">Do que você precisa?</label><textarea id="ncD" rows="5" maxlength="2000" placeholder="Explique o que aconteceu e o que precisa ser feito."></textarea></div>
+    <p class="note" style="margin:0">A franqueadora recebe o chamado na hora. Quando ela aceitar, abre um bate-papo aqui mesmo.</p>
+    <div class="err" id="ncErr" role="alert"></div>
+    <div class="foot"><div></div><div><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn pri">Abrir chamado</button></div></div></form>`,false,()=>{
+    $("#fNc").addEventListener("submit",async e=>{ e.preventDefault(); const b=e.submitter; const err=$("#ncErr"); err.textContent="";
+      b.disabled=true; const {data,error}=await FB.sb.rpc("ch_abrir",{p_assunto:$("#ncA").value,p_descricao:$("#ncD").value}); b.disabled=false;
+      if(error){ err.textContent=msgErro(error); return; } closeModal(); ui.chSel=data; ui.chFiltro="aberto"; atualizarTabelas("chamados","mensagens","diario"); toast("Chamado aberto"); }); },"all");
 }
-function chatTela(tid,lado){
-  const ehTenant = S.tid===tid && (lado==="franq" || !!S.tenant);
-  const t = ehTenant ? S.tenant : S.tenants.find(x=>x.id===tid);
-  const msgs = ehTenant ? S.msgs : S.chatMsgs; const chs = ehTenant ? S.cham : S.chatCham;
-  if(!t) return '<div class="empty">Carregando…</div>';
-  const ch=t.chat||{}; const [et,ec]=ETQ[ch.status||"nao_resolvido"];
-  const am=t.acessoMaster, lib=am&&tsMs(am.ate)>Date.now();
-  const pendRede=chs.find(c=>c.status==="pendente"), aberto=chs.find(c=>c.status==="aberto");
-  const eu=(S.me&&S.me.id);
-  let acesso="";
-  if(lado==="rede"){
-    acesso = lib ? `<div class="chat-acesso ok"><b>Edição liberada</b> até ${dtHora(am.ate)} (pedido #${esc(am.numero||"")}) <button class="btn sm pri" data-act="abrir-aba" data-id="${tid}" data-leitura="0">Abrir página do franqueado ↗</button><button class="btn sm" data-act="chat-encerrar" data-tid="${tid}">Encerrar</button></div>`
-      : pendRede ? `<div class="chat-acesso"><b>Aguardando o franqueado aprovar</b> o acesso (pedido #${esc(pendRede.numero)}, prazo pedido ${esc(durTxt(pendRede.duracaoH))}). ${pendRede.solicitadoPor===eu?`<button class="btn sm" data-act="ch-cancelar" data-id="${pendRede.id}">Cancelar pedido</button>`:""}</div>`
-      : masterRede()||bpoTenant() ? `<div class="chat-acesso"><span>Precisa alterar algo na página do franqueado?</span><select id="chatPrazo" aria-label="Prazo do acesso">${DUR_CH.map(([h,tx])=>opt(h,tx,4)).join("")}</select><button class="btn sm pri" data-act="chat-pedir" data-tid="${tid}">Solicitar acesso de edição</button></div>` : "";
-    if(aberto) acesso+=`<div class="chat-acesso"><b>O franqueado pediu um ajuste</b> (pedido #${esc(aberto.numero)}): ${esc(aberto.descricao||"")} <button class="btn sm pri" data-act="ch-aceitar" data-id="${aberto.id}">Aceitar</button><button class="btn sm" data-act="ch-recusar" data-id="${aberto.id}">Recusar</button></div>`;
-  } else {
-    acesso = pendRede ? `<div class="chat-acesso alerta-acesso"><b>A franqueadora pediu acesso de edição</b> (pedido #${esc(pendRede.numero)}): ${esc(pendRede.descricao||"")}<div class="imp-linha"><span class="note">Liberar por</span><select id="chatPrazo">${DUR_CH.map(([h,tx])=>opt(h,tx,pendRede.duracaoH||4)).join("")}</select><button class="btn sm pri" data-act="chat-aprovar" data-id="${pendRede.id}">Aprovar acesso</button><button class="btn sm" data-act="chat-negar" data-id="${pendRede.id}">Negar</button></div></div>`
-      : lib ? `<div class="chat-acesso ok"><b>A franqueadora está com acesso de edição</b> até ${dtHora(am.ate)}. <button class="btn sm" data-act="chat-encerrar" data-tid="${tid}">Encerrar agora</button></div>`
-      : aberto ? `<div class="chat-acesso">Seu pedido #${esc(aberto.numero)} está aguardando a franqueadora. ${aberto.solicitadoPor===eu?`<button class="btn sm" data-act="ch-cancelar" data-id="${aberto.id}">Cancelar</button>`:""}</div>`
-      : `<div class="chat-acesso"><span>Precisa que a franqueadora faça um ajuste no seu sistema?</span><button class="btn sm" data-act="novo-chamado-fr">Pedir ajuste</button></div>`;
-  }
+function encerrarChamadoModal(c){
+  let nota=0;
+  openModal(`<h2>Encerrar chamado #${esc(c.numero)}</h2><p class="note" style="margin-top:0">${esc(c.assunto||"")}</p>
+    <div class="field"><span class="flabel">Como foi o atendimento?</span><div class="star-pick" id="stP">${[1,2,3,4,5].map(n=>`<button type="button" data-n="${n}" aria-label="${n} estrela(s)">★</button>`).join("")}</div><span class="note" id="stTxt">Escolha de 1 a 5 estrelas</span></div>
+    <div class="field"><label for="stC">Comentário (opcional)</label><textarea id="stC" rows="3" maxlength="1000" placeholder="Conte como foi o atendimento"></textarea></div>
+    <p class="note" style="margin:0">Ao encerrar, o acesso da franqueadora ao seu sistema termina na hora e a conversa fica salva no histórico.</p>
+    <div class="err" id="stErr" role="alert"></div>
+    <div class="foot"><div></div><div><button type="button" class="btn" data-close>Voltar</button><button type="button" class="btn pri" id="stOk">Encerrar e avaliar</button></div></div>`,false,()=>{
+    const TX=["","Ruim","Regular","Bom","Muito bom","Excelente"];
+    $("#stP").addEventListener("click",e=>{ const b=e.target.closest("[data-n]"); if(!b) return; nota=+b.dataset.n; $("#stP").querySelectorAll("button").forEach(x=>x.classList.toggle("on",+x.dataset.n<=nota)); $("#stTxt").textContent=`${nota} de 5 — ${TX[nota]}`; });
+    $("#stOk").addEventListener("click",async e=>{ if(!nota){ $("#stErr").textContent="Escolha de 1 a 5 estrelas."; return; } if(await rpcCh("ch_encerrar",{p_id:c.id,p_nota:nota,p_comentario:$("#stC").value},"Chamado encerrado. Obrigado pela avaliação!",e.currentTarget)) closeModal(); }); },"all");
+}
+function chLista(lista,lado){
+  const f=ui.chFiltro||"ativos";
+  const grupos={ativos:lista.filter(c=>c.status==="aberto"||c.status==="atendimento"),aberto:lista.filter(c=>c.status==="aberto"),atendimento:lista.filter(c=>c.status==="atendimento"),fechados:lista.filter(c=>c.status==="encerrado"||c.status==="cancelado")};
+  const sel=grupos[f]||grupos.ativos;
+  return `<div class="seg ch-filtro">${[["ativos","Abertos"],["aberto","Aguardando aceite"],["atendimento","Em atendimento"],["fechados","Encerrados"]].map(([k,t])=>`<button data-act="ch-filtro" data-v="${k}" aria-pressed="${f===k}">${t} <span class="note">${grupos[k].length}</span></button>`).join("")}</div>
+    ${sel.map(c=>{ const [st,cl]=CH_ST[c.status]||["",""]; const nl=chNaoLido(c,lado); const t=lado==="rede"?S.tenants.find(x=>x.id===c.tid):null;
+      return `<button class="chat-item ${ui.chSel===c.id?"on":""}" data-act="ch-sel" data-id="${c.id}"><div class="ci-t"><b>#${esc(c.numero)} · ${esc(c.assunto||c.tipo||"")}</b>${nl||(lado==="rede"&&c.status==="aberto")||(lado==="franq"&&c.acesso&&c.acesso.status==="pedido")?'<i class="ci-dot"></i>':""}</div>
+        ${t?`<div class="ci-p"><b>${esc(tNome(t))}</b></div>`:""}<div class="ci-p">${esc(c.preview||c.descricao||"")}</div>
+        <div class="ci-m"><span class="pill ${cl}">${st}</span>${c.nota?estrelas(c.nota):`<small>${dtHora(c.ultima||c.abertoEm)}</small>`}</div></button>`; }).join("")||'<div class="empty">Nenhum chamado aqui.</div>'}`;
+}
+function chPane(c,lado){
+  if(!c) return `<div class="empty" style="padding:40px">${lado==="franq"?'Selecione um chamado à esquerda ou <button class="btn sm pri" data-act="ch-novo">Abrir chamado</button>':"Selecione um chamado à esquerda."}</div>`;
+  const msgs=(lado==="franq"?S.msgs:S.chatMsgs).filter(m=>m.chamadoId===c.id);
+  const t=lado==="rede"?S.tenants.find(x=>x.id===c.tid):S.tenant; const [st,cl]=CH_ST[c.status]||["",""];
+  const ac=c.acesso||{}; const outroLido=lado==="rede"?(c.lidoFranq||""):(c.lidoRede||"");
+  let barra="";
+  if(c.status==="aberto") barra = lado==="rede"
+      ? `<div class="chat-acesso alerta-acesso"><b>Novo chamado aguardando aceite.</b><div class="imp-linha"><button class="btn pri" data-act="ch-aceitar2" data-id="${c.id}">Aceitar e iniciar atendimento</button></div></div>`
+      : `<div class="chat-acesso">Aguardando a franqueadora aceitar o chamado. <button class="btn sm" data-act="ch-cancelar2" data-id="${c.id}">Cancelar chamado</button></div>`;
+  else if(c.status==="atendimento"){
+    if(lado==="rede") barra = ac.status==="aprovado" ? `<div class="chat-acesso ok"><b>Acesso liberado</b> pelo franqueado em ${dtHora(ac.aprovadoEm)} — vale até o chamado ser encerrado. <button class="btn sm pri" data-act="abrir-aba" data-id="${c.tid}" data-leitura="0">Abrir sistema do franqueado ↗</button><button class="btn sm" data-act="ch-revogar" data-id="${c.id}">Encerrar acesso</button></div>`
+        : ac.status==="pedido" ? `<div class="chat-acesso">Pedido de acesso enviado em ${dtHora(ac.pedidoEm)} — <b>aguardando o franqueado autorizar</b>.</div>`
+        : `<div class="chat-acesso"><span>Precisa mexer no sistema do franqueado?${ac.status==="negado"?" (o último pedido foi negado)":""}</span><button class="btn sm pri" data-act="ch-pedir" data-id="${c.id}">Pedir acesso ao sistema</button></div>`;
+    else barra = (ac.status==="pedido" ? `<div class="chat-acesso alerta-acesso"><b>A franqueadora pediu acesso ao seu sistema</b> para fazer os ajustes deste chamado. Com a autorização, ela pode editar, alterar e excluir até você encerrar o chamado (ou o acesso).<div class="imp-linha"><button class="btn pri" data-act="ch-autorizar" data-id="${c.id}">Autorizar acesso</button><button class="btn" data-act="ch-negar" data-id="${c.id}">Negar</button></div></div>`
+        : ac.status==="aprovado" ? `<div class="chat-acesso ok"><b>A franqueadora está com acesso ao seu sistema</b> desde ${dtHora(ac.aprovadoEm)}. <button class="btn sm" data-act="ch-revogar" data-id="${c.id}">Encerrar acesso</button></div>` : "")
+        + `<div class="chat-acesso"><span>Problema resolvido?</span><button class="btn sm pri" data-act="ch-encerrar" data-id="${c.id}">Encerrar chamado e avaliar</button></div>`;
+  } else barra = `<div class="chat-acesso"><b>${c.status==="cancelado"?"Chamado cancelado":"Chamado encerrado"}</b> em ${dtHora(c.encerradoEm)}${c.encerradoPorNome?" por "+esc(c.encerradoPorNome):""}. ${c.nota?`Avaliação: ${estrelas(c.nota)}${c.comentario?` — “${esc(c.comentario)}”`:""}`:""}</div>`;
   const bolha=m=>{ if(m.tipo==="sistema") return `<div class="msg-sis"><span>${esc(m.texto||"")}</span><small>${dtHora(m.quando)}</small></div>`;
-    const meu=m.lado===lado; return `<div class="msg ${meu?"meu":""}"><div class="msg-b"><div class="msg-a">${esc(m.nome||"")} <span>· ${esc(m.lado==="rede"?"Franqueadora":"Franqueado")}</span></div><div class="msg-t">${esc(m.texto||"").replace(/\n/g,"<br>")}</div><small>${dtHora(m.quando)}</small></div></div>`; };
-  const draft=((ui.chatDraft||{})[tid])||"";
+    const meu=m.lado===lado; const lida=meu&&outroLido&&outroLido>=m.quando;
+    return `<div class="msg ${meu?"meu":""}"><div class="msg-b"><div class="msg-a">${esc(m.nome||"")} <span>· ${m.lado==="rede"?"Franqueadora":"Franqueado"}</span></div><div class="msg-t">${esc(m.texto||"").replace(/\n/g,"<br>")}</div><small>${dtHora(m.quando)}${meu?(lida?` · <b class="lida">✓✓ lida</b>`:` · ✓ enviada`):""}</small></div></div>`; };
+  const draft=((ui.chatDraft||{})[c.id])||"";
+  setTimeout(()=>marcarLidoCh(c,lado),200);
   return `<div class="chat">
-    <div class="chat-h"><div><b>${esc(lado==="rede"?tNome(t):"Conversa com a franqueadora")}</b>${lado==="rede"?` <button type="button" class="link-btn note" data-act="abrir-aba" data-id="${tid}">ver página (somente leitura) ↗</button>`:""}</div>
-      <div class="seg chat-etq" role="group" aria-label="Situação">${Object.entries(ETQ).map(([k,[n]])=>`<button data-act="chat-status" data-tid="${tid}" data-v="${k}" aria-pressed="${(ch.status||"nao_resolvido")===k}">${n}</button>`).join("")}</div></div>
-    ${acesso}
-    <div class="chat-msgs" id="chatMsgs">${msgs.length?msgs.map(bolha).join(""):'<div class="empty">Nenhuma mensagem ainda. Escreva abaixo para começar a conversa.</div>'}</div>
-    <div class="chat-in"><textarea id="chatTxt" data-tid="${tid}" rows="2" placeholder="Escreva sua mensagem… (Enter envia, Shift+Enter quebra a linha)">${esc(draft)}</textarea><button class="btn pri" data-act="chat-enviar" data-tid="${tid}">Enviar</button></div>
+    <div class="chat-h"><div><b>#${esc(c.numero)} · ${esc(c.assunto||c.tipo||"")}</b> <span class="pill ${cl}">${st}</span>
+      <div class="note">${lado==="rede"&&t?`<b>${esc(tNome(t))}</b> · `:""}aberto em ${dtHora(c.abertoEm)} por ${esc(c.abertoPorNome||"")}${c.aceitoEm?` · aceito em ${dtHora(c.aceitoEm)} por ${esc(c.aceitoPorNome||"")}`:""}${lado==="rede"?` · <button type="button" class="link-btn" data-act="abrir-aba" data-id="${c.tid}">ver sistema (leitura) ↗</button>`:""}</div></div></div>
+    <div class="ch-desc"><span class="flabel">O que o franqueado precisa</span>${esc(c.descricao||"").replace(/\n/g,"<br>")}</div>
+    ${barra}
+    <div class="chat-msgs" id="chatMsgs">${msgs.length?msgs.map(bolha).join(""):'<div class="empty">Sem mensagens ainda.</div>'}</div>
+    ${c.status==="atendimento"?`<div class="chat-in"><textarea id="chatTxt" data-cid="${c.id}" rows="2" placeholder="Escreva sua mensagem… (Enter envia, Shift+Enter quebra a linha)">${esc(draft)}</textarea><button class="btn pri" data-act="chat-enviar" data-id="${c.id}">Enviar</button></div>`:""}
   </div>`;
 }
 function vChamadosRede(){
-  const q=normTxt(ui.chq||""); const ts=[...S.tenants].filter(t=>!q||normTxt(tNome(t)).includes(q));
-  ts.sort((a,b)=>((b.chat&&b.chat.ultima)||"").localeCompare((a.chat&&a.chat.ultima)||"")||tNome(a).localeCompare(tNome(b)));
-  if(!ui.chatTid&&ts.length&&!ui._chatAuto){ ui._chatAuto=true; setTimeout(()=>abrirChat((ts.find(t=>t.chat&&t.chat.ultima)||ts[0]).id),0); }
-  return header("Chamados","Conversa com cada franqueado — o histórico continua de onde parou. Peça acesso de edição pela conversa; quando o franqueado aprovar, abra a página dele em outra aba.")
-   + `<div class="chat-wrap"><div class="chat-lista"><input type="search" id="chQ" placeholder="Buscar franqueado" value="${esc(ui.chq||"")}">
-       ${ts.map(t=>{ const ch=t.chat||{}; const [et,ec]=ETQ[ch.status||"nao_resolvido"]; const nl=naoLida(ch,"rede");
-         return `<button class="chat-item ${ui.chatTid===t.id?"on":""}" data-act="chat-abrir" data-id="${t.id}"><div class="ci-t"><b>${esc(tNome(t))}</b>${nl?'<i class="ci-dot" title="mensagem nova"></i>':""}</div>
-           <div class="ci-p">${ch.ultima?esc(ch.preview||""):'<span class="note">sem conversa ainda</span>'}</div>
-           <div class="ci-m">${ch.ultima?`<span class="pill ${ec}">${et}</span><small>${dtHora(ch.ultima)}</small>`:""}</div></button>`; }).join("")||'<div class="empty">Nenhum franqueado.</div>'}</div>
-     <div class="chat-pane">${ui.chatTid?chatTela(ui.chatTid,"rede"):'<div class="empty">Escolha um franqueado à esquerda.</div>'}</div></div>`;
+  const lista=S.chamRede||[]; const c=ui.chSel&&lista.find(x=>x.id===ui.chSel);
+  if(c) vigiarMsgsRede(c.tid);
+  return header("Chamados","O franqueado abre o chamado; você aceita e atende pelo bate-papo. Para mexer no sistema dele, peça acesso dentro do chamado. Ao final, o franqueado encerra e avalia o atendimento.")
+   + resumoNotas(lista)
+   + `<div class="chat-wrap"><div class="chat-lista">${chLista(lista,"rede")}</div><div class="chat-pane">${chPane(c,"rede")}</div></div>`;
 }
+function resumoNotas(lista){ const av=lista.filter(c=>c.nota); if(!av.length) return ""; const m=av.reduce((a,c)=>a+ +c.nota,0)/av.length;
+  return `<div class="banner info" style="margin-bottom:10px">Avaliação média dos atendimentos: <b>${m.toLocaleString("pt-BR",{maximumFractionDigits:1})} de 5</b> ${estrelas(Math.round(m))} (${av.length} avaliação(ões))</div>`; }
 /* ---------- DRE: lançamentos de cada linha ---------- */
 function dreDetalhe(id,c){
   const tx=id.startsWith("_tx_"); const caixa=ui.d.regime==="caixa";
@@ -1626,10 +1650,12 @@ function render(){
 }
 // conversa sempre em dia: recarrega ao entrar e a cada 6 s enquanto a conversa estiver na tela (além do tempo real)
 let _chatView=null;
-setInterval(()=>{ const naConversa=(ui.view==="chamadosrede"&&ui.chatTid)||(ui.view==="chamados"&&ui.chTab!=="diario");
+setInterval(()=>{ const naConversa=ui.view==="chamadosrede"||(ui.view==="chamados"&&ui.chTab!=="diario");
   if(naConversa&&!document.hidden){ atualizarTabelas("mensagens","chamados","tenants"); }
-  const v=naConversa?ui.view+":"+(ui.chatTid||S.tid):null; if(v&&v!==_chatView) atualizarTabelas("mensagens","chamados","tenants"); _chatView=v; },6000);
-document.addEventListener("keydown",e=>{ const t=e.target; if(t&&t.id==="chatTxt"&&e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviarMsg(t.dataset.tid); } });
+  const v=naConversa?ui.view+":"+(ui.chSel||S.tid):null; if(v&&v!==_chatView) atualizarTabelas("mensagens","chamados","tenants"); _chatView=v; },6000);
+// reserva do tempo real: chamados novos aparecem no menu mesmo fora da tela de chamados
+setInterval(()=>{ if(!document.hidden&&S.me&&(masterRede()||masterFranq())) atualizarTabelas("chamados"); },20000);
+document.addEventListener("keydown",e=>{ const t=e.target; if(t&&t.id==="chatTxt"&&e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviarMsg(t.dataset.cid); } });
 let rT; window.addEventListener("resize",()=>{ clearTimeout(rT); rT=setTimeout(()=>{ if(ui.view==="painel"||ui.view==="fluxo"||ui.view==="painelrede") render(); },150); });
 
 /* ---------- modal ---------- */
@@ -2842,7 +2868,7 @@ function assinarRede(){
     const iv=setInterval(()=>{ if(!S.tid&&ui.view==="painelrede") carregarIndicadores(); },60000); UNSUB_REDE.push(()=>clearInterval(iv));
     UNSUB_REDE.push(vigiar("rede_diario",{cols:"id,data",ordem:["criado",false],limite:300},rows=>{ S.redeDiario=rows.map(r=>({...r.data,id:r.id})); if(!S.tid) render(); }));
   }
-  UNSUB_REDE.push(vigiar("chamados",{eq:[["data->>status","aberto"]]},rows=>{ S.chamRede=rows.map(r=>({...r.data,id:r.id,tid:r.tid})); if(!S.tid) render(); }));
+  UNSUB_REDE.push(vigiar("chamados",{cols:"id,tid,data",ordem:["criado",false],limite:500},rows=>{ const novo=rows.map(r=>({...r.data,id:r.id,tid:r.tid})); const sig=JSON.stringify(novo); if(sig===S._chSig) return; S._chSig=sig; S.chamRede=novo; if(!S.tid) render(); }));
 }
 function abrirTenant(tid){
   if(tid) fecharChat();
@@ -2866,8 +2892,8 @@ function abrirTenant(tid){
   sub(S.db.collection(COL.lojas),s=>{ S.lojas=s.docs.map(strip); render(); agendarAuto(); });
   sub(S.db.collection(COL.usr),s=>{ S.usr=s.docs.map(strip); S.names={}; S.usr.forEach(u=>S.names[u.id]=u.nome||u.email||""); if(S.me) S.names[S.me.id]=S.names[S.me.id]||S.me.name; render(); });
   if(gestorFranq()||plat()){
-    sub(S.db.collection("chamados").orderBy("solicitadoEm","desc").limit(200),s=>{ S.cham=s.docs.map(strip); render(); });
-    sub(S.db.collection("mensagens").orderBy("quando","desc").limit(600),s=>{ const novo=s.docs.map(strip).reverse(); const mudou=novo.length!==S.msgs.length||(novo.length&&novo[novo.length-1].id!==S.msgs[S.msgs.length-1].id); S.msgs=novo; if(mudou&&ui.view==="chamados"){ render(); marcarLido(S.tid); } });
+    sub(S.db.collection("chamados").orderBy("abertoEm","desc").limit(300),s=>{ const novo=s.docs.map(strip); const sig=JSON.stringify(novo); if(sig===S._chSigT) return; S._chSigT=sig; S.cham=novo; render(); });
+    sub(S.db.collection("mensagens").orderBy("quando","desc").limit(1500),s=>{ const novo=s.docs.map(strip).reverse(); const mudou=novo.length!==S.msgs.length||(novo.length&&novo[novo.length-1].id!==S.msgs[S.msgs.length-1].id); S.msgs=novo; if(mudou&&ui.view==="chamados") render(); });
     sub(S.db.collection("diario").orderBy("quando","desc").limit(500),s=>{ S.diario=s.docs.map(strip); if(ui.view==="diario") render(); });
   }
   computeRole(); render();
@@ -3165,28 +3191,26 @@ function statusCh(c){
 function bannerAcesso(){
   if(!S.tid||!S.tenant) return "";
   const am=S.tenant.acessoMaster, lib=am&&tsMs(am.ate)>Date.now();
-  const pend=S.cham.filter(c=>c.status==="pendente"), abertos=S.cham.filter(c=>c.status==="aberto");
   if(S.claims.papel==="observador") return `<div class="banner ro-banner">Modo observador — somente leitura. Nada pode ser editado ou excluído.</div>`;
-  if(masterRede()&&S.forcarLeitura) return `<div class="banner ro-banner">Aberto <b>só para leitura</b> (pela aba Franqueados). Para editar, peça o acesso na conversa em <b>Chamados</b> e abra pelo link de edição.</div>`;
-  if(masterRede()){
-    const av=abertos.length?`<div class="banner lib-banner">O franqueado abriu ${abertos.length} chamado(s) aguardando a sua resposta. <button class="btn sm pri" data-act="ver-chamados">Ver chamados</button></div>`:"";
-    return av + (lib ? `<div class="banner lib-banner">Edição autorizada pelo franqueado até <b>${dtHora(am.ate)}</b> (chamado #${esc(am.numero||"")}). Todas as alterações ficam registradas. <button class="btn sm" data-act="encerrar-acesso">Encerrar agora</button></div>`
-      : `<div class="banner ro-banner">Você está em modo leitura (pode editar só os dados da empresa, em Lojas). ${pend.length?`Há ${pend.length} chamado(s) aguardando aprovação do franqueado.`:""} <button class="btn sm" data-act="novo-chamado">Solicitar autorização de edição</button></div>`);
-  }
-  if(masterFranq()&&pend.length) return `<div class="banner lib-banner">Chamado aguardando a sua aprovação de acesso: <b>${esc(pend[0].tipo)}</b> — ${esc(pend[0].descricao)} <button class="btn sm pri" data-act="ver-chamados">Ver e responder</button></div>`;
+  if(masterRede()&&S.forcarLeitura) return `<div class="banner ro-banner">Aberto <b>só para leitura</b> (pela aba Franqueados).${lib?" Para editar, use o link “Abrir sistema do franqueado” dentro do chamado.":""}</div>`;
+  if(masterRede()) return lib
+    ? `<div class="banner lib-banner">Acesso de edição <b>liberado pelo franqueado</b> no chamado #${esc(am.numero||"")} — vale até o chamado ser encerrado. Tudo fica registrado no Diário.</div>`
+    : `<div class="banner ro-banner">Você está em modo leitura (pode editar só os dados da empresa, em Lojas). O acesso de edição é liberado pelo franqueado dentro de um chamado.</div>`;
+  const ped=S.cham.find(c=>c.status==="atendimento"&&c.acesso&&c.acesso.status==="pedido");
+  if(masterFranq()&&ped) return `<div class="banner lib-banner">A franqueadora pediu acesso ao seu sistema no chamado #${esc(ped.numero)} (${esc(ped.assunto||"")}). <button class="btn sm pri" data-act="ver-ch" data-id="${ped.id}">Ver e responder</button></div>`;
   if(bpoTenant()) return `<div class="banner info">Você é o <b>BPO financeiro</b> deste franqueado: pode lançar e editar tudo. O franqueado ${S.tenant.permFranq&&Object.values(S.tenant.permFranq).some(v=>+v===2)?"edita só o que você liberou":"só visualiza"} (Usuários → Acesso do franqueado).</div>`;
-  if(masterFranq()&&temBpo()&&!pend.length) return `<div class="banner info">A gestão financeira das suas lojas é feita pelo <b>BPO ${esc(S.tenant.bpoNome||"")}</b>. Envie a ele as contas a pagar e as informações das lojas (como taxas da maquininha); você acompanha tudo por aqui.</div>`;
-  if(gestorFranq()&&lib) return `<div class="banner info">A franqueadora está com acesso de edição até ${dtHora(am.ate)} (chamado #${esc(am.numero||"")}). ${masterFranq()?`<button class="btn sm" data-act="encerrar-acesso">Encerrar acesso</button>`:""}</div>`;
+  if(masterFranq()&&temBpo()&&!lib) return `<div class="banner info">A gestão financeira das suas lojas é feita pelo <b>BPO ${esc(S.tenant.bpoNome||"")}</b>. Envie a ele as contas a pagar e as informações das lojas (como taxas da maquininha); você acompanha tudo por aqui.</div>`;
+  if(gestorFranq()&&lib) return `<div class="banner info">A franqueadora está com <b>acesso de edição</b> ao seu sistema pelo chamado #${esc(am.numero||"")}. O acesso termina quando você encerrar o chamado. ${masterFranq()&&am.chamadoId?`<button class="btn sm" data-act="ch-revogar" data-id="${esc(am.chamadoId)}">Encerrar acesso agora</button>`:""}</div>`;
   return "";
 }
 function vChamados(){
   const aba=ui.chTab==="diario"?"diario":"conversa";
-  const abas=`<div class="seg ch-abas" role="tablist"><button role="tab" data-act="ch-aba" data-v="conversa" aria-pressed="${aba==="conversa"}">Conversa</button><button role="tab" data-act="ch-aba" data-v="diario" aria-pressed="${aba==="diario"}">Diário (registro de tudo)</button></div>`;
-  const topo=header("Chamados", plat()?"Conversa com este franqueado e pedidos de acesso. Tudo fica registrado.":"Converse com a franqueadora. Pedidos de acesso, aprovações e liberações aparecem aqui, com data e hora.")+(aba==="diario"?banners():"")+abas;
+  const franq=!plat(); const lista=S.cham||[]; const c=ui.chSel&&lista.find(x=>x.id===ui.chSel);
+  const abas=`<div class="seg ch-abas" role="tablist"><button role="tab" data-act="ch-aba" data-v="conversa" aria-pressed="${aba==="conversa"}">Chamados</button><button role="tab" data-act="ch-aba" data-v="diario" aria-pressed="${aba==="diario"}">Diário (registro de tudo)</button></div>`;
+  const topo=header("Chamados", franq?"Precisa de ajuda da franqueadora? Abra um chamado. Quando ela aceitar, vocês conversam por aqui; ao final, encerre e avalie o atendimento.":"Chamados deste franqueado.", franq&&masterFranq()?`<button class="btn pri" data-act="ch-novo">+ Abrir chamado</button>`:"")+(aba==="diario"?banners():"")+abas;
   if(aba==="diario") return topo+diarioHTML();
-  setTimeout(()=>marcarLido(S.tid),300);
-  if(ui._chEnt!==S.tid){ ui._chEnt=S.tid; setTimeout(()=>atualizarTabelas("mensagens","chamados","tenants"),0); }
-  return topo+chatTela(S.tid,plat()?"rede":"franq");
+  if(!franq&&c) vigiarMsgsRede(S.tid);
+  return topo+`<div class="chat-wrap"><div class="chat-lista">${chLista(lista,franq?"franq":"rede")}</div><div class="chat-pane">${chPane(c,franq?"franq":"rede")}</div></div>`;
 }
 function diarioHTML(){
   const f=ui.dg=ui.dg||{cat:"",q:""}; const rows=filtraDiario();
@@ -3682,8 +3706,8 @@ document.addEventListener("click",async e=>{
   if(act==="trocar-senha"){ trocarSenhaModal(); return; }
   if(act==="entrar-tenant"){ abrirTenant(id); window.scrollTo(0,0); return; }
   if(act==="abrir-aba"){ abrirAba(id,a.dataset.leitura!=="0"); return; }
-  if(act==="ir-chat"){ ui.view="chamadosrede"; abrirChat(id); return; }
-  if(act==="chat-enviar"){ enviarMsg(a.dataset.tid); return; }
+  if(act==="ir-chat"){ ui.view="chamadosrede"; const c=(S.chamRede||[]).find(x=>x.tid===id&&(x.status==="aberto"||x.status==="atendimento")); ui.chSel=c?c.id:null; render(); return; }
+  if(act==="chat-enviar"){ enviarMsg(id); return; }
   if(act==="chat-status"){ FB.sb.rpc("chat_status",{p_tid:a.dataset.tid,p_status:a.dataset.v}).then(({error})=>{ if(error) toast(msgErro(error)); else atualizarTabelas("tenants","mensagens"); }); return; }
   if(act==="chat-pedir"){ pedirAcessoChat(a.dataset.tid,a); return; }
   if(act==="chat-aprovar"){ const c=chamadoPor(id); if(c){ const h=+(($("#chatPrazo")||{}).value||c.duracaoH||4); a.disabled=true; FB.sb.rpc("autorizar_chamado",{p_id:c.id,p_horas:h,p_obs:""}).then(({error})=>{ a.disabled=false; if(error) toast(msgErro(error)); else { atualizarTabelas("chamados","tenants","mensagens","diario"); toast("Acesso aprovado"); } }); } return; }
@@ -3718,7 +3742,17 @@ document.addEventListener("click",async e=>{
   if(act==="dash-hoje"){ ui.dash={modo:"mes",mes:mkey(HOJE)}; render(); return; }
   if(act==="pf-salvar"&&(bpoTenant()||masterRede())){ const perm={}; MODS.forEach(([k])=>{ const r=document.querySelector(`input[name="pf_${k}"]:checked`); perm[k]=r?+r.value:1; });
     a.disabled=true; FB.sb.rpc("definir_perm_franqueado",{p_tid:S.tid,p_perm:perm}).then(({error})=>{ a.disabled=false; if(error) toast("Não foi possível salvar: "+msgErro(error)); else { atualizarTabelas("tenants","diario"); toast("Acesso do franqueado salvo"); } }); return; }
-  if(act==="chat-abrir"){ abrirChat(id); return; }
+  if(act==="ver-ch"){ ui.view="chamados"; ui.chTab="conversa"; ui.chSel=id; render(); return; }
+  if(act==="ch-sel"){ ui.chSel=id; render(); return; }
+  if(act==="ch-filtro"){ ui.chFiltro=a.dataset.v; render(); return; }
+  if(act==="ch-novo"&&masterFranq()){ novoChamadoFr(); return; }
+  if(act==="ch-aceitar2"&&masterRede()){ rpcCh("ch_aceitar",{p_id:id},"Chamado aceito — atendimento iniciado",a).then(ok=>{ if(ok) ui.chFiltro="atendimento"; }); return; }
+  if(act==="ch-cancelar2"){ confirmBtn(a,"Confirmar cancelamento",()=>rpcCh("ch_encerrar",{p_id:id,p_nota:null,p_comentario:""},"Chamado cancelado",a)); return; }
+  if(act==="ch-pedir"){ rpcCh("ch_pedir_acesso",{p_id:id},"Pedido de acesso enviado ao franqueado",a); return; }
+  if(act==="ch-autorizar"){ confirmBtn(a,"Confirmar: autorizar acesso",()=>rpcCh("ch_autorizar_acesso",{p_id:id},"Acesso autorizado",a)); return; }
+  if(act==="ch-negar"){ rpcCh("ch_negar_acesso",{p_id:id},"Acesso negado",a); return; }
+  if(act==="ch-revogar"){ confirmBtn(a,"Confirmar: encerrar acesso",()=>rpcCh("ch_revogar_acesso",{p_id:id},"Acesso encerrado",a)); return; }
+  if(act==="ch-encerrar"){ const c=chamadoPor(id); if(c) encerrarChamadoModal(c); return; }
   if(act==="dre-grp"){ ui.dreFech=ui.dreFech||{}; const g=a.dataset.g; if(ui.dreFech[g]) delete ui.dreFech[g]; else ui.dreFech[g]=true; render(); return; }
   if(act==="dre-resumo"){ ui.dreFech={}; if(a.dataset.v==="1") DRE_LINHAS.filter(x=>x[0]==="grp").forEach(x=>ui.dreFech[x[1]]=true); render(); return; }
   if(act==="dre-abrir"){ ui.dreAb=ui.dreAb||{}; if(ui.dreAb[id]) delete ui.dreAb[id]; else ui.dreAb[id]=true; render(); return; }
@@ -3771,7 +3805,7 @@ document.addEventListener("input",e=>{
   if(t.id==="fcQ"){ clearTimeout(qT); qT=setTimeout(()=>{ ui.c.q=t.value; render(); },220); }
   if(t.id==="flQ"){ clearTimeout(qT); qT=setTimeout(()=>{ ui.l.q=t.value; render(); },220); }
   if(t.id==="ffoQ"){ clearTimeout(qT); qT=setTimeout(()=>{ ui.fo.q=t.value; render(); },220); }
-  if(t.id==="chatTxt"){ ui.chatDraft=ui.chatDraft||{}; ui.chatDraft[t.dataset.tid]=t.value; return; }
+  if(t.id==="chatTxt"){ ui.chatDraft=ui.chatDraft||{}; ui.chatDraft[t.dataset.cid]=t.value; return; }
   if(t.id==="chQ"){ clearTimeout(qT); qT=setTimeout(()=>{ ui.chq=t.value; render(); },220); return; }
   if(t.id==="drQ"){ clearTimeout(qT); qT=setTimeout(()=>{ ui.drq=t.value; render(); },220); }
   if(t.id==="frQ"){ clearTimeout(qT); qT=setTimeout(()=>{ ui.rq=t.value; render(); },220); }
