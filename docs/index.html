@@ -941,7 +941,7 @@ function vPainel(){
   const cens = porLoja ? [...centros(),...(porLoja.byCen[""].rec||porLoja.byCen[""].gas?[{id:"",nome:"Sem loja (mover)"}]:[])] : [];
   return `<figure class="quote" role="note">${(()=>{ const f=fraseDoDia(); return `<span class="q-lbl">Frase do dia</span><blockquote><p>${esc(f.texto)}</p></blockquote><figcaption>— ${esc(f.autor)}</figcaption>`; })()}</figure>`
    + header("Dashboard", `${hojeMes?new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"}):"Vendo "+esc(P.nome)} · ${esc(ccLabel(cc))}`, relBtns("dash",{xlsx:false})+ccSelect())
-   + `<div class="toolbar dash-per">${dashFiltro()}</div>`
+   + `<div class="toolbar dash-per">${periodoFiltro("dash")}</div>`
    + banners()
    + bizBlock(cc)
    + (hojeMes?`<div class="sec-lbl">Indicadores financeiros</div><div class="kpis">
@@ -956,8 +956,8 @@ function vPainel(){
       <div class="kpi"><span class="lbl">Ficou em aberto</span><span class="val ${FP.venc.length?'neg':''}">${FP.ab.length}</span><span class="sub">${fmt0(FP.aRec)} a receber · ${fmt0(FP.aPag)} a pagar${FP.venc.length?` · ${FP.venc.length} vencido(s)`:""}</span></div>
     </div>`)+`
     <div class="grid g2">
-      <div class="panel"><h2>Fluxo de caixa<small>${P.modo==="ano"?"meses de "+P.y:"3 meses antes e 2 depois de "+esc(P.label)}</small></h2>${legendFlux}<div class="chart" id="chPainel"></div></div>
-      <div class="panel"><h2>Resultado ${P.modo==="ano"?"de "+P.y:"de "+esc(P.curto)}<small>competência${P.modo==="mes"&&!P.atual?" · "+esc(P.label):""}</small></h2>
+      <div class="panel"><h2>Fluxo de caixa<small>${P.modo==="ano"?"meses de "+P.y:P.modo==="periodo"?esc(P.label):"3 meses antes e 2 depois de "+esc(P.label)}</small></h2>${legendFlux}<div class="chart" id="chPainel"></div></div>
+      <div class="panel"><h2>Resultado ${P.modo==="ano"?"de "+P.y:P.modo==="periodo"?"do período":"de "+esc(P.curto)}<small>competência${P.modo==="mes"&&!P.atual?" · "+esc(P.label):""}</small></h2>
         <div class="list">
           ${[["Receita bruta",d.tot.receita],["Receita líquida",d.tot.RL],["Lucro bruto",d.tot.LB],["Resultado operacional",d.tot.RO],["Resultado líquido",d.tot.RLIQ]].map(([n,v],i)=>`
           <div class="li" style="grid-template-columns:1fr auto auto"><span ${i===4?'style="font-weight:700"':''}>${n}</span><span class="num note">${i?pct(v,d.tot.RL):""}</span><span class="num ${v<0?'neg':''}" ${i===4?'style="font-weight:600"':''}>${fmt(v)}</span></div>`).join("")}
@@ -986,19 +986,36 @@ function vPainel(){
         <button class="btn sm" style="margin-top:10px" data-nav="agenda">Abrir agenda</button>
       </div>
     </div>`}
-    ${porLoja&&S.lojas.length?`<div class="panel" style="margin-top:16px"><h2>Resultado por loja<small>competência · ${esc(P.modo==="ano"?P.y:P.label)}</small></h2>${cenTable(porLoja,cens)}</div>`:""}`;
+    ${porLoja&&S.lojas.length?`<div class="panel" style="margin-top:16px"><h2>Resultado por loja<small>competência · ${esc(P.label)}</small></h2>${cenTable(porLoja,cens)}</div>`:""}`;
 }
 const ehFat = l => l.tipo==="receita" && (catBy(l.categoria)?.grupo||"receita")==="receita";
 /* ---------- dashboard: período (mês ou ano) ---------- */
-function dashPer(){
-  const cur=mkey(HOJE); const d=ui.dash||{};
-  if(d.modo==="ano"){ const y=String(d.ano||cur.slice(0,4)); return {modo:"ano",ini:y+"-01",fim:y+"-12",atual:y===cur.slice(0,4),y,label:y,nome:`ano de ${y}`,curto:y}; }
-  const m=d.mes||cur; return {modo:"mes",ini:m,fim:m,atual:m===cur,m,label:mlabel(m),nome:`${MESES_L[+m.slice(5)-1].toLowerCase()} de ${m.slice(0,4)}`,curto:MESES_L[+m.slice(5)-1].toLowerCase()};
+const mesesEntre = (a,b) => (+b.slice(0,4)-+a.slice(0,4))*12+(+b.slice(5)-+a.slice(5))+1;
+const PER_PADRAO={dash:"mes",fluxo:"ano",dre:"ano",rede:"mes"};
+function perDe(k){
+  const cur=mkey(HOJE); const d=(ui.per&&ui.per[k])||{}; const modo=d.modo||PER_PADRAO[k]||"mes";
+  if(modo==="ano"){ const y=String(d.ano||cur.slice(0,4)); return {k,modo,y,ini:y+"-01",fim:y+"-12",atual:y===cur.slice(0,4),label:y,nome:`ano de ${y}`,curto:y}; }
+  if(modo==="periodo"){ let ini=d.ini||addMonths(cur,-2), fim=d.fim||cur; if(fim<ini) [ini,fim]=[fim,ini]; if(mesesEntre(ini,fim)>36) fim=addMonths(ini,35);
+    const lb=`${mlabel(ini)} a ${mlabel(fim)}`; return {k,modo,ini,fim,n:mesesEntre(ini,fim),atual:ini<=cur&&cur<=fim,label:lb,nome:`período de ${lb}`,curto:lb}; }
+  const m=d.mes||cur; return {k,modo:"mes",m,ini:m,fim:m,atual:m===cur,label:mlabel(m),nome:`${MESES_L[+m.slice(5)-1].toLowerCase()} de ${m.slice(0,4)}`,curto:MESES_L[+m.slice(5)-1].toLowerCase()};
 }
+function periodoFiltro(k){
+  const P=perDe(k); const anos=k==="rede"?redeAnos():dashAnos(); const padrao=PER_PADRAO[k]||"mes";
+  const ehPadrao = !(ui.per&&ui.per[k]) || (P.modo===padrao&&P.atual);
+  return `<div class="field"><span class="flabel">Período</span><div class="seg">${[["mes","Mês"],["ano","Ano"],["periodo","Período"]].map(([v,t])=>`<button data-act="per-modo" data-k="${k}" data-v="${v}" aria-pressed="${P.modo===v}">${t}</button>`).join("")}</div></div>
+    ${P.modo==="mes"?`<div class="field"><label for="per_mes_${k}">Mês</label><input type="month" id="per_mes_${k}" data-per="${k}" data-c="mes" value="${esc(P.m)}"></div>`
+     :P.modo==="ano"?`<div class="field"><label for="per_ano_${k}">Ano</label><select id="per_ano_${k}" data-per="${k}" data-c="ano">${anos.map(y=>opt(y,y,P.y)).join("")}</select></div>`
+     :`<div class="field"><label for="per_ini_${k}">De</label><input type="month" id="per_ini_${k}" data-per="${k}" data-c="ini" value="${esc(P.ini)}"></div><div class="field"><label for="per_fim_${k}">Até</label><input type="month" id="per_fim_${k}" data-per="${k}" data-c="fim" value="${esc(P.fim)}"></div>`}
+    ${ehPadrao?"":`<button class="btn sm" data-act="per-hoje" data-k="${k}" style="align-self:flex-end;margin-bottom:3px">${padrao==="ano"?"Voltar ao ano atual":"Voltar ao mês atual"}</button>`}`;
+}
+function dashPer(){ return perDe("dash"); }
 function dashAnos(){ const cur=+mkey(HOJE).slice(0,4); let min=cur; S.lanc.forEach(l=>{ const y=+String(compOf(l)||"").slice(0,4); if(y&&y<min&&y>1990) min=y; }); const a=[]; for(let y=cur;y>=min;y--) a.push(String(y)); return a; }
 function fatPer(p,cc){
   if(p.modo==="mes"){ const ms=[]; for(let i=5;i>=0;i--) ms.push(addMonths(p.m,-i)); const serie=ms.map(k=>({k,v:fatMes(k,cc)})); const fat=serie[5].v, ant=serie[4].v;
     return {fat,ant,serie,cmpTxt:`vs ${mlabel(ms[4])}`,barTxt:"últimos 6 meses",destaque:p.m}; }
+  if(p.modo==="periodo"){ const n=mesesEntre(p.ini,p.fim); const serie=[]; for(let i=0;i<n;i++){ const k=addMonths(p.ini,i); serie.push({k,v:fatMes(k,cc)}); }
+    const fat=serie.reduce((a,x)=>a+x.v,0); const ai=addMonths(p.ini,-n), af=addMonths(p.ini,-1); let ant=0; for(let i=0;i<n;i++) ant+=fatMes(addMonths(ai,i),cc);
+    return {fat,ant,serie,cmpTxt:`vs ${mlabel(ai)} a ${mlabel(af)}`,barTxt:"meses do período",destaque:p.atual?mkey(HOJE):""}; }
   const y=p.y, cur=mkey(HOJE); const serie=[]; for(let i=1;i<=12;i++) serie.push({k:`${y}-${pad(i)}`,v:fatMes(`${y}-${pad(i)}`,cc)});
   const ateM = p.atual ? +cur.slice(5) : 12;   // ano corrente: compara os mesmos meses do ano anterior
   const fat=serie.reduce((a,x)=>a+x.v,0); let ant=0; for(let i=1;i<=ateM;i++) ant+=fatMes(`${+y-1}-${pad(i)}`,cc);
@@ -1027,8 +1044,8 @@ function bizBlock(cc){
   const lj=S.lojas.filter(l=>ccOk(l.id,cc)); const ativas=lj.filter(lojaAtiva).length; const lojaSel=lojaBy(ccLoja(cc));
   return `<div class="sec-lbl">Indicadores do negócio · ${esc(p.nome)}</div><div class="biz biz2">
     <div class="kpi fat"><div class="fat-top"><div><span class="lbl">Faturamento · ${esc(p.modo==="ano"?p.y+(p.atual?" (até hoje)":""):p.curto)}</span><span class="val">${fmt(F.fat)}</span>
-      <span class="sub">${varPct==null?(p.modo==="ano"?"sem base no ano anterior":"sem base no mês anterior"):`<b class="${varPct<0?"neg":"up"}">${varPct>=0?"▲":"▼"} ${Math.abs(varPct).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</b> ${esc(F.cmpTxt)}`}${p.modo==="ano"?` · média ${fmtK(Math.round(F.fat/Math.max(1,F.serie.filter(x=>x.v).length)))}/mês`:""}</span></div></div>
-      <div class="hbars ${p.modo==="ano"?"hb12":""}" role="img" aria-label="Evolução do faturamento — ${esc(F.barTxt)}">${F.serie.map(x=>`<div class="hb ${x.k===F.destaque?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmt(x.v):"—"}</span></div>`).join("")}</div>
+      <span class="sub">${varPct==null?(p.modo==="ano"?"sem base no ano anterior":p.modo==="periodo"?"sem base no período anterior":"sem base no mês anterior"):`<b class="${varPct<0?"neg":"up"}">${varPct>=0?"▲":"▼"} ${Math.abs(varPct).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</b> ${esc(F.cmpTxt)}`}${p.modo!=="mes"?` · média ${fmt(Math.round(F.fat/Math.max(1,F.serie.filter(x=>x.v).length)))}/mês`:""}</span></div></div>
+      <div class="hbars ${F.serie.length>6?"hb12":""}" role="img" aria-label="Evolução do faturamento — ${esc(F.barTxt)}">${F.serie.map(x=>`<div class="hb ${x.k===F.destaque?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmt(x.v):"—"}</span></div>`).join("")}</div>
     </div>
     <div class="kpi"><span class="lbl">${lojaSel?"Status da loja":"Lojas ativas"}</span><span class="val">${lojaSel?(lojaAtiva(lojaSel)?"Ativa":"Inativa"):ativas}</span><span class="sub">${lojaSel?(lojaSel.inauguracao?"inaugurada em "+dBR(lojaSel.inauguracao):"sem data de inauguração"):`de ${lj.length} loja(s) cadastrada(s)`}</span></div>
   </div>`;
@@ -1104,7 +1121,7 @@ function vContas(tipo){
 
 function vFluxo(){
   if(!ui.f.ini) ui.f.ini=addMonths(mkey(HOJE),-5);
-  const meses=fluxoMeses(ui.f.ini,12,ui.cc);
+  const meses=fluxoMeses(ui.f.ini,ui.f.n||12,ui.cc);
   const cur=mkey(HOJE);
   const th=meses.map(m=>`<th class="r ${m.k===cur?'cur':''}">${mlabel(m.k)}${m.k>cur?'<div class="thn">projeção</div>':m.k===cur?'<div class="thn">atual</div>':''}</th>`).join("");
   const fnTot=fn=>meses.reduce((a,m)=>a+fn(m),0);
@@ -1115,7 +1132,7 @@ function vFluxo(){
     + banners()
     + `<div class="toolbar">
         ${ccSelect()}
-        <div class="field"><label for="ffIni">A partir de</label><input type="month" id="ffIni" value="${esc(ui.f.ini)}"></div>
+        ${periodoFiltro("fluxo")}
       </div>
       <div class="panel" style="margin-bottom:16px">${legendFlux}<div class="chart" id="chFluxo"></div></div>
       <div class="tbl-wrap"><table class="fx">
@@ -1158,8 +1175,7 @@ function vDre(){
     + banners()
     + `<div class="toolbar">
         ${ccSelect()}
-        <div class="field"><label for="fdIni">De</label><input type="month" id="fdIni" value="${esc(ui.d.ini)}"></div>
-        <div class="field"><label for="fdFim">Até</label><input type="month" id="fdFim" value="${esc(ui.d.fim)}"></div>
+        ${periodoFiltro("dre")}
         <div class="field"><span class="flabel">Regime</span><div class="seg"><button data-f="d.regime" data-v="competencia" aria-pressed="${ui.d.regime==="competencia"}">Competência</button><button data-f="d.regime" data-v="caixa" aria-pressed="${ui.d.regime==="caixa"}">Caixa</button></div></div>
         ${(()=>{ const gs=DRE_LINHAS.filter(x=>x[0]==="grp").map(x=>x[1]); const todosF=gs.every(g=>(ui.dreFech||{})[g]), nenhumF=gs.every(g=>!(ui.dreFech||{})[g]);
           return `<div class="field"><span class="flabel">Exibir</span><div class="seg"><button data-act="dre-resumo" data-v="1" aria-pressed="${todosF}">Só os tópicos</button><button data-act="dre-resumo" data-v="0" aria-pressed="${nenhumF}">Detalhado</button></div></div>`; })()}
@@ -1230,7 +1246,7 @@ function pizzaHTML(lista,tot,pc){
     <div class="pz-leg">${fatias.map((x,i)=>`<div class="pz-li"><i style="background:${COR_PIZZA[i%COR_PIZZA.length]}"></i><span class="pz-n">${esc(x.nome)}</span><span class="num pz-v">${fmt(x.v)}</span><b class="num">${pc(x.v)}</b></div>`).join("")}</div></div>`;
 }
 function analiseHTML(chave,titulo,sub,lista){
-  const modo=(ui.anl||{})[chave]||"grafico"; const tot=lista.reduce((a,x)=>a+x.v,0); const mx=Math.max(1,...lista.map(x=>x.v));
+  const modo=(ui.anl||{})[chave]||(/^fx/.test(chave)?"pizza":"grafico"); const tot=lista.reduce((a,x)=>a+x.v,0); const mx=Math.max(1,...lista.map(x=>x.v));
   const pc=v=>tot?(v/tot*100).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+"%":"—";
   const gnome=g=>(GRUPOS.find(x=>x.id===g)||{}).nome||"—";
   const corpo = !lista.length ? '<div class="empty">Nada no período e filtro escolhidos.</div>'
@@ -1492,6 +1508,7 @@ function render(){
   if(!S.me||document.body.classList.contains("auth")) return;
   if(S.mode==="loading"){ main.innerHTML=`<div class="empty" style="padding-top:20vh">Carregando dados…</div>`; return; }
   if(ui.view!=="taxas") taxasRasc=null;
+  { const pf=perDe("fluxo"); ui.f.ini=pf.ini; ui.f.n=mesesEntre(pf.ini,pf.fim); const pd=perDe("dre"); ui.d.ini=pd.ini; ui.d.fim=pd.fim; }
   if(ui.cc==="lojas"||ui.cc==="matriz") ui.cc="";
   const vok=viewsOk();
   if(!vok.some(v=>v[0]===ui.view)){ const pri=vok.find(v=>v[0]!=="sep"); ui.view = pri?pri[0]:"painel"; }
@@ -1505,8 +1522,8 @@ function render(){
   main.innerHTML=(V||vPainel)();
   if(ui.view==="lojas") bindMatriz();
   if(ui.view==="meucad") bindMeuCadastro();
-  if(ui.view==="painel"){ const P=dashPer(); fluxChart(P.modo==="ano"?fluxoMeses(P.ini,12,ui.cc):fluxoMeses(addMonths(P.m,-3),6,ui.cc),"chPainel"); }
-  if(ui.view==="fluxo") fluxChart(fluxoMeses(ui.f.ini,12,ui.cc),"chFluxo");
+  if(ui.view==="painel"){ const P=dashPer(); fluxChart(P.modo==="ano"?fluxoMeses(P.ini,12,ui.cc):P.modo==="periodo"?fluxoMeses(P.ini,P.n,ui.cc):fluxoMeses(addMonths(P.m,-3),6,ui.cc),"chPainel"); }
+  if(ui.view==="fluxo") fluxChart(fluxoMeses(ui.f.ini,ui.f.n||12,ui.cc),"chFluxo");
   if(focusId){ const el=document.getElementById(focusId); if(el&&!$("#modalRoot").contains(el)){ el.focus(); try{ if(selStart!=null) el.setSelectionRange(selStart,selStart); }catch(e){} } }
 }
 let rT; window.addEventListener("resize",()=>{ clearTimeout(rT); rT=setTimeout(()=>{ if(ui.view==="painel"||ui.view==="fluxo"||ui.view==="painelrede") render(); },150); });
@@ -2208,7 +2225,7 @@ function reportData(k){
   }
   if(k==="fluxo"){
     if(!ui.f.ini) ui.f.ini=addMonths(mkey(HOJE),-5);
-    const ms=fluxoMeses(ui.f.ini,12,cc); const tot=fn=>ms.reduce((a,m)=>a+fn(m),0);
+    const ms=fluxoMeses(ui.f.ini,ui.f.n||12,cc); const tot=fn=>ms.reduce((a,m)=>a+fn(m),0);
     const L=(label,fn,s)=>({c:[label,...ms.map(m=>M$(fn(m))),M$(tot(fn))],s});
     return {title:"Fluxo de caixa", sheet:"Fluxo de caixa", land:true, file:`minimart-fluxo-de-caixa-${HOJE}`,
       sub:`${ccTxt} · ${mlabel(ms[0].k)} a ${mlabel(ms[ms.length-1].k)} · realizado pela baixa, em aberto pela data de pagamento`,
@@ -2399,18 +2416,19 @@ const pdfArquivo = base => `minimart-${base}-${pSlug(ccLabel(ui.cc))}-${HOJE}`;
 /* dashboard */
 async function pdfDashboard(){
   const cc=ui.cc, P=dashPer(), cur=P.modo==="mes"?P.m:mkey(HOJE), MES=P.nome, hojeMes=P.modo==="mes"&&P.atual;
-  const K=await pdfNovo(false,"Dashboard",`${P.modo==="ano"?"Resumo do ano de "+P.y:"Resumo de "+MES} · gerado em ${dBR(HOJE)}`);
+  const K=await pdfNovo(false,"Dashboard",`${P.modo==="ano"?"Resumo do ano de "+P.y:P.modo==="periodo"?"Resumo do "+P.nome:"Resumo de "+MES} · gerado em ${dBR(HOJE)}`);
   const {doc,M,CW}=K;
   /* negócio */
   const FA=fatPer(P,cc); const serie=FA.serie, fat=FA.fat, ant=FA.ant; const vp=ant?(((P.modo==="ano"&&P.atual)?FA.fatCmp:fat)-ant)/ant*100:null;
   const lj=S.lojas.filter(l=>ccOk(l.id,cc==="matriz"?"":cc)), ativas=lj.filter(lojaAtiva).length, lojaSel=lojaBy(ccLoja(cc));
   pdfSec(K,"Indicadores do negócio",MES);
   pdfCards(K,[
-    {lbl:P.modo==="ano"?"Faturamento do ano":"Faturamento do mês",val:fmt(fat),sub:vp==null?"sem base de comparação":`${vp>=0?"+":"-"}${Math.abs(vp).toLocaleString("pt-BR",{maximumFractionDigits:1})}% ${FA.cmpTxt}`,subCor:vp==null?null:vp<0?[255,160,150]:[140,225,180],hero:true},
+    {lbl:P.modo==="ano"?"Faturamento do ano":P.modo==="periodo"?"Faturamento do período":"Faturamento do mês",val:fmt(fat),sub:vp==null?"sem base de comparação":`${vp>=0?"+":"-"}${Math.abs(vp).toLocaleString("pt-BR",{maximumFractionDigits:1})}% ${FA.cmpTxt}`,subCor:vp==null?null:vp<0?[255,160,150]:[140,225,180],hero:true},
     {lbl:lojaSel?"Status da loja":"Lojas ativas",val:lojaSel?(lojaAtiva(lojaSel)?"Ativa":"Inativa"):String(ativas),sub:lojaSel?(lojaSel.inauguracao?"inaugurada em "+dBR(lojaSel.inauguracao):""):`de ${lj.length} loja(s) cadastrada(s)`}
   ]);
-  pdfSec(K,"Evolução do faturamento",FA.barTxt,serie.length*(P.modo==="ano"?3.6:6.4));
-  K.y+=pdfBarrasH(K,serie.map(x=>({lbl:MESES_L[+x.k.slice(5)-1].slice(0,3)+"/"+x.k.slice(2,4),v:x.v,cor:x.k===FA.destaque?PC.blue:PC.blueL,bold:x.k===FA.destaque})),M,K.y,CW,{lw:18,vw:30,rh:P.modo==="ano"?3.6:undefined,bh:P.modo==="ano"?2.6:undefined})+5;
+  const rhF=serie.length>6?Math.max(2.4,Math.min(3.6,43/serie.length)):6.4;
+  pdfSec(K,"Evolução do faturamento",FA.barTxt,serie.length*rhF);
+  K.y+=pdfBarrasH(K,serie.map(x=>({lbl:MESES_L[+x.k.slice(5)-1].slice(0,3)+"/"+x.k.slice(2,4),v:x.v,cor:x.k===FA.destaque?PC.blue:PC.blueL,bold:x.k===FA.destaque})),M,K.y,CW,{lw:18,vw:30,rh:serie.length>6?rhF:undefined,bh:serie.length>6?rhF*0.7:undefined})+5;
   /* financeiro */
   const L=S.lanc.filter(l=>inCC(l,cc)), ate=addDays(HOJE,30), ab=L.filter(l=>!l.pago), soma=a=>a.reduce((x,l)=>x+l.valor,0);
   const rec30=ab.filter(l=>l.tipo==="receita"&&l.venc>=HOJE&&l.venc<=ate), pag30=ab.filter(l=>l.tipo==="despesa"&&l.venc>=HOJE&&l.venc<=ate), venc=ab.filter(l=>l.venc<HOJE);
@@ -2432,13 +2450,13 @@ async function pdfDashboard(){
     {lbl:"Vencidos",val:String(venc.length),sub:`${fmtK(soma(venc.filter(l=>l.tipo==="receita")))} a receber · ${fmtK(soma(venc.filter(l=>l.tipo==="despesa")))} a pagar`,cor:venc.length?PC.neg:null,acc:venc.length?PC.neg:PC.blue}
   ],21);
   }
-  const hF=P.modo==="ano"?44:54;
-  pdfSec(K,"Fluxo de caixa",P.modo==="ano"?"meses de "+P.y:"3 meses antes e 2 depois",hF+6);
+  const hF=P.modo==="mes"?54:44;
+  pdfSec(K,"Fluxo de caixa",P.modo==="ano"?"meses de "+P.y:P.modo==="periodo"?P.label:"3 meses antes e 2 depois",hF+6);
   pdfLegenda(K,M+CW-96,K.y-5.2,[[PC.blue,"Entradas"],[PC.blueL,"A receber"],[PC.dark,"Saídas"],[PC.grayL,"A pagar"]]);
-  pdfBarrasV(K,P.modo==="ano"?fluxoMeses(P.ini,12,cc):fluxoMeses(addMonths(cur,-3),6,cc),M,K.y,CW,hF); K.y+=hF+8;
+  pdfBarrasV(K,P.modo==="ano"?fluxoMeses(P.ini,12,cc):P.modo==="periodo"?fluxoMeses(P.ini,P.n,cc):fluxoMeses(addMonths(cur,-3),6,cc),M,K.y,CW,hF); K.y+=hF+8;
   /* resultado */
   const d=dreCalc(P.ini,P.fim,"competencia",cc);
-  pdfSec(K,P.modo==="ano"?"Resultado do ano":"Resultado do mês","competência · "+MES,40);
+  pdfSec(K,P.modo==="ano"?"Resultado do ano":P.modo==="periodo"?"Resultado do período":"Resultado do mês","competência · "+(P.modo==="periodo"?P.label:MES),40);
   pdfTabela(K,[{h:"Linha do resultado",w:70},{h:"Valor",w:25,a:"r"},{h:"% da receita líquida",w:22,a:"r"}],
     [["Receita bruta",d.tot.receita,""],["Receita líquida",d.tot.RL,"sub"],["Lucro bruto",d.tot.LB,""],["Resultado operacional",d.tot.RO,""],["Resultado líquido",d.tot.RLIQ,"tot"]].map(([n,v,s],i)=>({c:[n,M$(v),i?pct(v,d.tot.RL):""],s})));
   pdfRodape(K);
@@ -2448,7 +2466,7 @@ async function pdfDashboard(){
 /* fluxo de caixa */
 async function pdfFluxo(){
   const cc=ui.cc; if(!ui.f.ini) ui.f.ini=addMonths(mkey(HOJE),-5);
-  const ms=fluxoMeses(ui.f.ini,12,cc), u=ms[ms.length-1], tot=fn=>ms.reduce((a,m)=>a+fn(m),0);
+  const ms=fluxoMeses(ui.f.ini,ui.f.n||12,cc), u=ms[ms.length-1], tot=fn=>ms.reduce((a,m)=>a+fn(m),0);
   const K=await pdfNovo(true,"Fluxo de caixa",`${MESES_L[+ms[0].k.slice(5)-1]} de ${ms[0].k.slice(0,4)} a ${MESES_L[+u.k.slice(5)-1].toLowerCase()} de ${u.k.slice(0,4)} · realizado pela data da baixa; em aberto pela data de pagamento`);
   const {doc,M,CW}=K;
   const eR=tot(m=>m.inR), eP=tot(m=>m.inP), sR=tot(m=>m.outR), sP=tot(m=>m.outP), res=eR+eP-sR-sP;
@@ -2702,7 +2720,7 @@ function entrarApp(){
 function assinarPlano(){ UNSUB_REDE.push(vigiar("rede_config",{cols:"id,data",id:"plano"},rows=>{ S.planoRede=rows[0]?rows[0].data:null; render(); },"id=eq.plano")); }
 async function carregarIndicadores(){
   if(!masterRede()) return;
-  const P=redePer(); const ini=[addMonths(mkey(HOJE),-12),P.modo==="ano"?`${+P.y-1}-01`:addMonths(P.m,-6)].sort()[0], fim=addMonths(mkey(HOJE),6);
+  const P=redePer(); const ini=[addMonths(mkey(HOJE),-12),P.modo==="ano"?`${+P.y-1}-01`:P.modo==="periodo"?addMonths(P.ini,-P.n):addMonths(P.m,-6)].sort()[0], fim=[addMonths(mkey(HOJE),6),P.fim].sort().pop();
   const {data,error}=await FB.sb.rpc("indicadores_rede",{p_ini:ini,p_fim:fim});
   if(error){ console.warn("indicadores",error.message); return; }
   S.resumos=(data||[]).map(r=>({tid:r.tid,mes:r.mes,fat:+r.fat||0,rec:+r.rec||0,desp:+r.desp||0,recebido:+r.recebido||0,pago:+r.pago||0,abRec:+r.ab_rec||0,abPag:+r.ab_pag||0}));
@@ -2939,11 +2957,7 @@ function fluxoRede(tids){
   for(let i=-3;i<3;i++){ const k=addMonths(cur,i); const m={k,inR:somaRes(k,"recebido",tids),outR:somaRes(k,"pago",tids),inP:k>=cur?somaRes(k,"abRec",tids)+(k===cur?venc("abRec"):0):0,outP:k>=cur?somaRes(k,"abPag",tids)+(k===cur?venc("abPag"):0):0}; m.res=m.inR+m.inP-m.outR-m.outP; out.push(m); }
   return out;
 }
-function redePer(){
-  const cur=mkey(HOJE); const d=ui.rper||{};
-  if(d.modo==="ano"){ const y=String(d.ano||cur.slice(0,4)); return {modo:"ano",y,ini:y+"-01",fim:y+"-12",atual:y===cur.slice(0,4),nome:`ano de ${y}`}; }
-  const m=d.mes||cur; return {modo:"mes",m,ini:m,fim:m,atual:m===cur,nome:`${MESES_L[+m.slice(5)-1].toLowerCase()} de ${m.slice(0,4)}`};
-}
+function redePer(){ return perDe("rede"); }
 function redeAnos(){ const cur=+mkey(HOJE).slice(0,4); let min=cur; S.resumos.forEach(r=>{ const y=+String(r.mes||"").slice(0,4); if(y&&y<min&&y>1990) min=y; }); const a=[]; for(let y=cur;y>=Math.min(min,cur-1);y--) a.push(String(y)); return a; }
 function vPainelRede(){
   const cur=mkey(HOJE), P=redePer();
@@ -2956,22 +2970,21 @@ function vPainelRede(){
   const fatDe=(lista,ids)=>lista.reduce((a,k)=>a+somaRes(k,"fat",ids),0);
   let atuais, anteriores, serie, cmpTxt;
   if(P.modo==="mes"){ atuais=[P.m]; anteriores=[addMonths(P.m,-1)]; serie=[]; for(let i=5;i>=0;i--) serie.push(addMonths(P.m,-i)); cmpTxt=`vs ${mlabel(addMonths(P.m,-1))}`; }
+  else if(P.modo==="periodo"){ atuais=[]; for(let i=0;i<P.n;i++) atuais.push(addMonths(P.ini,i)); anteriores=atuais.map(k=>addMonths(k,-P.n)); serie=atuais; cmpTxt=`vs ${mlabel(anteriores[0])} a ${mlabel(anteriores[anteriores.length-1])}`; }
   else { serie=meses(P.y); const ate=P.atual?+cur.slice(5):12; atuais=serie.slice(0,ate); anteriores=meses(+P.y-1).slice(0,ate); cmpTxt=P.atual?`vs jan–${MESES_L[ate-1].slice(0,3).toLowerCase()} de ${+P.y-1}`:`vs ${+P.y-1}`; }
-  const fat=fatDe(P.modo==="ano"?serie:atuais,tids), fatCmp=fatDe(atuais,tids), fatA=fatDe(anteriores,tids), vp=fatA?(fatCmp-fatA)/fatA*100:null;
+  const fat=fatDe(P.modo!=="mes"?serie:atuais,tids), fatCmp=fatDe(atuais,tids), fatA=fatDe(anteriores,tids), vp=fatA?(fatCmp-fatA)/fatA*100:null;
   const sv=serie.map(k=>({k,v:somaRes(k,"fat",tids)})); const mx=Math.max(1,...sv.map(x=>x.v));
   const nMesesCom=Math.max(1,sv.filter(x=>x.v).length);
   const ticket=lojasAt?Math.round(fat/lojasAt):null;
-  const rk=tens.map(t=>{ const ids=new Set([t.id]); const f=fatDe(P.modo==="ano"?serie:atuais,ids), fc=fatDe(atuais,ids), fa=fatDe(anteriores,ids); const nl=+t.nLojasAtivas||0;
-    const r=(P.modo==="ano"?serie:atuais).reduce((a,k)=>a+somaRes(k,"rec",ids)-somaRes(k,"desp",ids),0); return {t,f,v:fa?(fc-fa)/fa*100:null,nl,tk:nl?Math.round(f/nl):null,r}; }).sort((a,b)=>b.f-a.f);
+  const rk=tens.map(t=>{ const ids=new Set([t.id]); const f=fatDe(P.modo!=="mes"?serie:atuais,ids), fc=fatDe(atuais,ids), fa=fatDe(anteriores,ids); const nl=+t.nLojasAtivas||0;
+    const r=(P.modo!=="mes"?serie:atuais).reduce((a,k)=>a+somaRes(k,"rec",ids)-somaRes(k,"desp",ids),0); return {t,f,v:fa?(fc-fa)/fa*100:null,nl,tk:nl?Math.round(f/nl):null,r}; }).sort((a,b)=>b.f-a.f);
   const porReg={}; rk.forEach(x=>{ const r=String((x.t.matriz&&x.t.matriz.regional)||"Sem regional"); porReg[r]=(porReg[r]||0)+x.f; });
   const regMax=Math.max(1,...Object.values(porReg));
   const semUso=ativos.filter(t=>!(tsMs(t.ultimoAcesso)>Date.now()-30*864e5));
   const negativos=rk.filter(x=>x.r<0&&x.t.ativo!==false);
   const chamP=S.chamRede.filter(c=>tids.has(c.tid));
   const card=(lbl,val,sub,cls,hero)=>`<div class="kpi ${hero?"hero":""}"><span class="lbl">${lbl}</span><span class="val ${cls||""}">${val}</span><span class="sub">${sub||""}</span></div>`;
-  const filtroPer=`<div class="field"><span class="flabel">Período</span><div class="seg"><button data-act="rper-modo" data-v="mes" aria-pressed="${P.modo==="mes"}">Mês</button><button data-act="rper-modo" data-v="ano" aria-pressed="${P.modo==="ano"}">Ano</button></div></div>
-    ${P.modo==="mes"?`<div class="field"><label for="rperMes">Mês</label><input type="month" id="rperMes" value="${esc(P.m)}" max="${esc(cur)}"></div>`:`<div class="field"><label for="rperAno">Ano</label><select id="rperAno">${redeAnos().map(y=>opt(y,y,P.y)).join("")}</select></div>`}
-    ${P.modo==="mes"&&P.atual?"":`<button class="btn sm" data-act="rper-hoje" style="align-self:flex-end;margin-bottom:3px">Voltar ao mês atual</button>`}`;
+  const filtroPer=periodoFiltro("rede");
   return header("Painel da rede",`${P.modo==="mes"&&P.atual?new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"}):"Vendo "+esc(P.nome)} · soma de ${tens.length} franqueado(s)${ui.rreg?" da regional "+esc(ui.rreg):""}`,
       `<div class="field"><label for="rrSel">Regional</label><select id="rrSel">${opt("","Todas as regionais",ui.rreg||"")}${regs.map(r=>opt(r,"Regional "+r,ui.rreg||"")).join("")}</select></div><button class="btn" data-act="recalc" title="Busca os números mais recentes de todos os franqueados">Atualizar números</button>`)
    + `<div class="toolbar dash-per">${filtroPer}</div>`
@@ -2984,11 +2997,11 @@ function vPainelRede(){
      <div class="sec-lbl">Negócio · ${esc(P.nome)}</div><div class="biz biz2">
        <div class="kpi fat"><div class="fat-top"><div><span class="lbl">Faturamento da rede${P.modo==="ano"&&P.atual?" (até hoje)":""}</span><span class="val">${fmt(fat)}</span>
          <span class="sub">${vp==null?"sem base de comparação":`<b class="${vp<0?"neg":"up"}">${vp>=0?"▲":"▼"} ${Math.abs(vp).toLocaleString("pt-BR",{maximumFractionDigits:1})}%</b> ${esc(cmpTxt)}`}</span></div></div>
-         <div class="hbars ${P.modo==="ano"?"hb12":""}">${sv.map(x=>`<div class="hb ${(P.modo==="mes"?x.k===P.m:x.k===cur)?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmt(x.v):"—"}</span></div>`).join("")}</div></div>
-       ${card("Ticket médio da rede",ticket==null?"—":fmt(ticket),lojasAt?`faturamento ÷ ${lojasAt} loja(s) ativa(s)${P.modo==="ano"?` · ${fmt0(Math.round(fat/lojasAt/nMesesCom))} por loja/mês`:""}`:"nenhuma loja ativa","",false)}
+         <div class="hbars ${sv.length>6?"hb12":""}">${sv.map(x=>`<div class="hb ${(P.modo==="mes"?x.k===P.m:x.k===cur)?"cur":""}"><span class="hb-l">${mlabel(x.k)}</span><span class="hb-t"><i style="width:${x.v/mx*100}%"></i></span><span class="hb-v num">${x.v?fmt(x.v):"—"}</span></div>`).join("")}</div></div>
+       ${card("Ticket médio da rede",ticket==null?"—":fmt(ticket),lojasAt?`faturamento ÷ ${lojasAt} loja(s) ativa(s)${P.modo!=="mes"?` · ${fmt0(Math.round(fat/lojasAt/nMesesCom))} por loja/mês`:""}`:"nenhuma loja ativa","",false)}
      </div>
      <div class="grid g2" style="margin-top:16px">
-       <div class="panel"><h2>Ranking de franqueados<small>faturamento · ${esc(P.nome)}</small></h2><div class="tbl-wrap" style="border:0"><table><thead><tr><th>#</th><th>Franqueado</th><th class="r">Faturamento</th><th class="r">${P.modo==="ano"?"vs ano ant.":"vs mês ant."}</th><th class="r">Ticket por loja</th><th class="r">Lojas</th><th></th></tr></thead><tbody>
+       <div class="panel"><h2>Ranking de franqueados<small>faturamento · ${esc(P.nome)}</small></h2><div class="tbl-wrap" style="border:0"><table><thead><tr><th>#</th><th>Franqueado</th><th class="r">Faturamento</th><th class="r">${P.modo==="ano"?"vs ano ant.":P.modo==="periodo"?"vs período ant.":"vs mês ant."}</th><th class="r">Ticket por loja</th><th class="r">Lojas</th><th></th></tr></thead><tbody>
          ${rk.map((x,i)=>`<tr><td class="num note">${i+1}</td><td><div class="desc">${esc(tNome(x.t))}</div><div class="meta">${x.t.matriz&&x.t.matriz.regional?"Reg. "+esc(x.t.matriz.regional)+" · ":""}${x.t.ativo===false?"suspenso":diasTxt(x.t.ultimoAcesso)}</div></td>
            <td class="r num">${fmt(x.f)}</td><td class="r num ${x.v==null?"":x.v<0?"neg":"pos"}">${x.v==null?"—":(x.v>=0?"+":"")+x.v.toLocaleString("pt-BR",{maximumFractionDigits:1})+"%"}</td><td class="r num">${x.tk==null?"—":fmt(x.tk)}</td><td class="r num">${x.nl}</td>
            <td class="r"><button class="btn sm" data-act="entrar-tenant" data-id="${x.t.id}">Entrar</button></td></tr>`).join("")||'<tr><td colspan="7" class="empty">Nenhum franqueado.</td></tr>'}
@@ -3598,6 +3611,10 @@ document.addEventListener("click",async e=>{
   if(act==="ir-taxas"){ ui.txMes=a.dataset.mes||mkey(HOJE); taxasRasc=null; ui.view="taxas"; render(); window.scrollTo(0,0); return; }
   if(act==="mover-sem-loja"&&isAdm()){ confirmBtn(a,"Confirmar: mover todos",()=>moverSemLoja(a)); return; }
   if(act==="ver-sem-loja"){ ui.view="lancamentos"; ui.l={tipo:"todos",mes:"",q:"",semLoja:true}; render(); return; }
+  if(act==="per-modo"){ const k=a.dataset.k, v=a.dataset.v; const P=perDe(k); ui.per=ui.per||{}; const n={...(ui.per[k]||{}),modo:v};
+    if(v==="ano"&&!n.ano) n.ano=P.fim.slice(0,4); if(v==="mes"&&!n.mes) n.mes=P.modo==="mes"?P.m:(P.atual?mkey(HOJE):P.fim); if(v==="periodo"&&!n.ini){ n.ini=P.modo==="mes"?addMonths(P.m,-2):P.ini; n.fim=P.modo==="mes"?P.m:P.fim; }
+    ui.per[k]=n; saveUi(); render(); if(k==="rede") carregarIndicadores(); return; }
+  if(act==="per-hoje"){ const k=a.dataset.k; if(ui.per) delete ui.per[k]; saveUi(); render(); if(k==="rede") carregarIndicadores(); return; }
   if(act==="rper-modo"){ ui.rper=ui.rper||{}; ui.rper.modo=a.dataset.v; if(a.dataset.v==="ano"&&!ui.rper.ano) ui.rper.ano=(ui.rper.mes||mkey(HOJE)).slice(0,4); render(); carregarIndicadores(); return; }
   if(act==="rper-hoje"){ ui.rper={modo:"mes",mes:mkey(HOJE)}; render(); carregarIndicadores(); return; }
   if(act==="dash-modo"){ ui.dash=ui.dash||{}; ui.dash.modo=a.dataset.v; if(a.dataset.v==="ano"&&!ui.dash.ano) ui.dash.ano=(ui.dash.mes||mkey(HOJE)).slice(0,4); render(); return; }
@@ -3666,6 +3683,7 @@ document.addEventListener("change",e=>{
   if(t.id==="tenSel"){ abrirTenant(t.value); return; }
   if(t.classList&&t.classList.contains("bpo-sel")&&masterRede()){ const tid=t.dataset.tid, v=t.value||null; t.disabled=true;
     FB.sb.rpc("definir_bpo",{p_tid:tid,p_bpo:v}).then(({error})=>{ t.disabled=false; if(error) toast("Não foi possível definir o BPO: "+msgErro(error)); else { atualizarTabelas("tenants"); toast(v?"BPO definido":"BPO removido"); } }); return; }
+  if(t.dataset&&t.dataset.per){ const k=t.dataset.per, c=t.dataset.c; if(!t.value) return; ui.per=ui.per||{}; ui.per[k]={...(ui.per[k]||{}),modo:perDe(k).modo,[c]:t.value}; saveUi(); render(); if(k==="rede") carregarIndicadores(); return; }
   if(t.id==="rperMes"){ ui.rper={...(ui.rper||{}),modo:"mes",mes:t.value||mkey(HOJE)}; render(); carregarIndicadores(); return; }
   if(t.id==="rperAno"){ ui.rper={...(ui.rper||{}),modo:"ano",ano:t.value}; render(); carregarIndicadores(); return; }
   if(t.id==="dashMes"){ ui.dash={...(ui.dash||{}),modo:"mes",mes:t.value||mkey(HOJE)}; render(); return; }
