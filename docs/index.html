@@ -1605,6 +1605,7 @@ function lancForm(l,tipoDefault){
       <div class="foot"><div>${isNew?"":l.recId?`<button type="button" class="btn danger" id="lDel">Excluir este mês</button>${recBy(l)&&recBy(l).ativa?`<button type="button" class="btn danger" id="lEnc">Encerrar a partir do próximo mês</button>`:""}<button type="button" class="btn danger" id="lDelAll">Excluir toda a recorrência</button>`:grp.length>1?`<button type="button" class="btn danger" id="lDel">Excluir esta</button><button type="button" class="btn danger" id="lDelAll">Excluir todas (${grp.length})</button>`:`<button type="button" class="btn danger" id="lDel">Excluir</button>`}</div>
         <div><button type="button" class="btn" data-close>${isNew||isAdm()?"Cancelar":"Fechar"}</button></div></div>
       ${!isNew&&l.recId?`<div class="scope-box"><span class="flabel">Salvar alteração em:</span><div class="scope-btns"><button type="submit" class="btn" data-scope="one">Só ${mlabel(compOf(l))}</button><button type="submit" class="btn" data-scope="next">Deste mês em diante</button><button type="submit" class="btn pri" data-scope="all">Todos os meses (inclui anteriores)</button></div></div>`
+        :!isNew&&autoEscopo(l)&&!l.pago?`<div class="scope-box"><span class="flabel">Salvar alteração em:</span><div class="scope-btns"><button type="submit" class="btn" data-scope="one">Só ${mlabel(compOf(l))}</button><button type="submit" class="btn" data-scope="next">Deste mês em diante</button><button type="submit" class="btn pri" data-scope="all">Todos os meses (inclui anteriores)</button></div><span class="note" style="width:100%">Contas já pagas não mudam.</span></div>`
         :!isNew&&grp.length>1?`<div class="scope-box"><span class="flabel">Salvar alteração em:</span><div class="scope-btns"><button type="submit" class="btn" data-scope="one">Só nesta parcela</button><button type="submit" class="btn pri" data-scope="all">Todas as parcelas (${grp.length})</button></div></div>`
         :`<div class="scope-box" style="justify-content:flex-end"><button type="submit" class="btn pri">${isNew?"Salvar lançamento":"Salvar alterações"}</button></div>`}
     </form>`,true,m=>{
@@ -1698,6 +1699,7 @@ function lancForm(l,tipoDefault){
         const varv = isNew ? cond==="rv" : ehVariavel(l);
         if(varv){ if($("#lValor").value.trim()&&!(valor>=0)) return fail("Valor inválido — use números, ex.: 1.250,00.",$("#lValor")); }
         else if(!(valor>0)) return fail("Informe um valor maior que zero, por exemplo 1.250,00.",$("#lValor"));
+        { const sc=e.submitter&&e.submitter.dataset.scope; if(!isNew&&autoEscopo(l)&&(sc==="next"||sc==="all")){ const b=e.submitter; b.disabled=true; try{ await aplicarEscopoAuto(l,sc,valor,($("#lVenc")||{}).value,$("#lForma").value); }catch(ex){ b.disabled=false; } return; } }
         if(isNew&&(cond==="rf"||cond==="rv")){ if(!$("#lR1").value) return fail("Informe a data do 1º pagamento.",$("#lR1")); if($("#lRFim").value&&$("#lRFim").value<mkey($("#lR1").value)) return fail("O último mês não pode ser antes do 1º pagamento.",$("#lRFim")); }
         const venc=$("#lVenc")?$("#lVenc").value:"";
         if(isNew&&cond==="1"&&!venc) return fail("Informe a data de pagamento.",$("#lVenc"));
@@ -1877,7 +1879,7 @@ function lojaForm(x){
         if(d.cnpj&&digitos(d.cnpj).length!==14){ err.textContent="O CNPJ do condomínio deve ter 14 dígitos."; $("#lj_cnpj").focus(); return; }
         if(d.cnpj) d.cnpj=fmtDoc(d.cnpj);
         if(d.email&&!/^\S+@\S+\.\S+$/.test(d.email)){ err.textContent="E-mail inválido."; $("#lj_email").focus(); return; }
-        const au=lerAutoLoja(err); if(!au) return; d.auto=au;
+        window.__autoPrev=(!isNew&&x.auto)||null; const au=lerAutoLoja(err); if(!au) return; d.auto=au;
         const tx=lerTaxasLoja(isNew?null:x,err); if(!tx) return; const txMud=tx._mud||[], txEsc=tx._esc, txMes=tx._mes; delete tx._mud; delete tx._esc; delete tx._mes; Object.assign(d,tx);
         try{
           if(isNew){ const id=newId("lojas"); await save("lojas",id,{...d,codigo:proxCodigo(S.lojas,"L",3),criado:new Date().toISOString()}); }
@@ -1987,7 +1989,8 @@ const reaisCent = v => { if(v==null||String(v).trim()==="") return null; let t=S
 function autoLojaHTML(a){
   a=a||{}; const roy=a.roy||{on:true,pct:5}; const cb=a.cb||{tipo:"nao"}; const fx=(cb.faixas&&cb.faixas.length)?cb.faixas:[{de:0,ate:1000000,pct:3},{de:1000001,ate:2000000,pct:5}];
   const linha=(f,i)=>`<div class="fx-row" data-i="${i}"><span class="note">de R$</span><input class="fx-de" inputmode="decimal" value="${f.de==null?"":esc(fmtIn(f.de))}" aria-label="Faturamento de"><span class="note">até R$</span><input class="fx-ate" inputmode="decimal" value="${f.ate==null?"":esc(fmtIn(f.ate))}" placeholder="acima" aria-label="Faturamento até"><input class="fx-pct" inputmode="decimal" value="${esc(pctTxt(f.pct))}" aria-label="Percentual"><span>%</span><button type="button" class="icon-btn fx-del" aria-label="Remover faixa">✕</button></div>`;
-  const mens=a.mens||{on:false,valor:null,dia:7}; const ener=a.ener||{tipo:"nao",valor:null,dia:15};
+  const cur=mkey(HOJE); const mens0=a.mens||{on:false,valor:null,dia:7}, ener0=a.ener||{tipo:"nao",valor:null,dia:15};
+  const mens={...mens0,...histEm(mens0,cur)}, ener={...ener0,...histEm(ener0,cur)};
   return `<div class="sect">Lançamentos automáticos da loja</div>
     <div class="auto-box" id="autoLoja">
       <label class="chkline" style="padding-top:0"><input type="checkbox" id="au_roy" ${roy.on===false?"":"checked"}> Calcular <b>royalties</b> sobre o faturamento da loja</label>
@@ -2013,7 +2016,7 @@ function autoLojaHTML(a){
         <div class="field" id="au_en_vbox" ${ener.tipo==="fixa"?"":"hidden"}><label for="au_en_v">Valor mensal (R$)</label><input id="au_en_v" inputmode="decimal" value="${ener.valor!=null?esc(fmtIn(ener.valor)):""}" placeholder="0,00"></div>
         <div class="field"><label for="au_en_d">Vence todo dia</label><input id="au_en_d" type="number" min="1" max="28" value="${esc(ener.dia||15)}"></div></div>
       <p class="note" id="au_en_var" style="margin:2px 0 0" ${ener.tipo==="var"?"":"hidden"}>Variável: todo mês aparece o lançamento “Energia” em Contas a pagar com o valor em branco, para você digitar a conta do mês.</p>
-      <p class="note" style="margin:8px 0 0">Mensalidade e energia: o vencimento é no próprio mês do lançamento. Todos os vencimentos que caírem em sábado, domingo ou feriado nacional vão para o próximo dia útil. Royalties e cashback — base: soma das vendas da loja no mês (crédito, crédito com antecipação, débito, Pix e vouchers). Os lançamentos aparecem em Contas a pagar, Fluxo e DRE e se atualizam enquanto estiverem em aberto; depois de pagos, não mudam mais.</p>
+      <p class="note" style="margin:8px 0 0">Mensalidade e energia: mudar o valor ou o dia aqui vale para todos os meses em aberto; para mudar só um mês ou a partir de um mês, edite o lançamento daquele mês em Contas a pagar. O vencimento é no próprio mês do lançamento. Todos os vencimentos que caírem em sábado, domingo ou feriado nacional vão para o próximo dia útil. Royalties e cashback — base: soma das vendas da loja no mês (crédito, crédito com antecipação, débito, Pix e vouchers). Os lançamentos aparecem em Contas a pagar, Fluxo e DRE e se atualizam enquanto estiverem em aberto; depois de pagos, não mudam mais.</p>
     </div>`;
 }
 function bindAutoLoja(){
@@ -2047,16 +2050,33 @@ function lerAutoLoja(err){
   if(mens.on){ const v=reaisCent($("#au_mens_v").value); if(v==null||isNaN(v)||v<=0){ err.textContent="Informe o valor mensal da mensalidade de sistema."; $("#au_mens_v").focus(); return null; } mens.valor=v; }
   const ener={tipo:$("#au_en").value||"nao",valor:null,dia:Math.min(28,Math.max(1,parseInt($("#au_en_d").value)||15))};
   if(ener.tipo==="fixa"){ const v=reaisCent($("#au_en_v").value); if(v==null||isNaN(v)||v<=0){ err.textContent="Informe o valor mensal fixo da energia."; $("#au_en_v").focus(); return null; } ener.valor=v; }
-  return {roy:{on,pct:on?rp:(isNaN(rp)?5:rp)},cb,dia,desde,mens,ener};
+  // preserva o histórico se valor/dia não mudaram aqui
+  const prev=window.__autoPrev||{}; const cur=mkey(HOJE);
+  const keep=(novo,old)=>{ if(!old) return novo; const ef=histEm(old,cur); if(novo.valor===ef.valor&&novo.dia===ef.dia) return {...novo,valor:old.valor,dia:old.dia,hist:old.hist||[]}; return {...novo,hist:[]}; };
+  return {roy:{on,pct:on?rp:(isNaN(rp)?5:rp)},cb,dia,desde,mens:keep(mens,prev.mens),ener:(ener.tipo==="fixa"&&prev.ener&&prev.ener.tipo==="fixa")?keep(ener,prev.ener):ener};
 }
 const AUTO_TIPOS=["royalty","cashback","mensalidade","energia"];
 const AUTO_NOME={royalty:"royalties",cashback:"cashback",mensalidade:"mensalidade de sistema",energia:"energia"};
 const autoManual = l => !!l && l.autoValor!=null && l.valor!==l.autoValor;
+// valor e dia vigentes num mês (mensalidade / energia fixa), considerando mudanças "deste mês em diante"
+function histEm(item,m){ let r={valor:item&&item.valor,dia:item&&item.dia}; for(const e of [...((item&&item.hist)||[])].sort((a,b)=>a.desde.localeCompare(b.desde))){ if(e.desde<=m) r={valor:e.valor,dia:e.dia}; } return r; }
+const autoEscopo = l => !!l && (l.auto==="mensalidade" || (l.auto==="energia" && ((lojaBy(l.centro)||{}).auto||{}).ener && lojaBy(l.centro).auto.ener.tipo==="fixa"));
+async function aplicarEscopoAuto(l,sc,valor,venc,forma){
+  const lj=lojaBy(l.centro); if(!lj||!lj.auto) return; const key=l.auto==="mensalidade"?"mens":"ener"; const item={...(lj.auto[key]||{})}; const k=l.competencia;
+  const dia=venc?Math.min(28,+venc.slice(8,10)||histEm(item,k).dia||7):histEm(item,k).dia;
+  if(sc==="all"){ item.valor=valor; item.dia=dia; item.hist=[]; }
+  else { const h=(item.hist||[]).filter(x=>x.desde<k); h.push({desde:k,valor,dia}); item.hist=h; }
+  await save("lojas",lj.id,{...lj,auto:{...lj.auto,[key]:item}});
+  for(const x of S.lanc){ if(x.auto===l.auto&&x.centro===l.centro&&!x.pago&&(sc==="all"||x.competencia>=k)){
+    if(autoManual(x)||x.forma!==forma||(x.autoVenc&&x.venc!==x.autoVenc)) await save("lanc",x.id,{...x,autoValor:x.valor,forma,venc:x.autoVenc||x.venc}); } }
+  diario(`${AUTO_NOME[l.auto][0].toUpperCase()+AUTO_NOME[l.auto].slice(1)} alterada`,`${cenNome(lj.id)}: ${fmt(valor)}, vence dia ${dia} — ${sc==="all"?"todos os meses em aberto":"de "+mlabel(k)+" em diante"}`,{cat:"alteracao"});
+  closeModal(); toast(sc==="all"?"Alterado em todos os meses em aberto":`Alterado de ${mlabel(k)} em diante`); agendarAuto();
+}
 function calcAuto(l){ // quanto o cálculo automático daria para este lançamento
   const lj=lojaBy(l.centro); const a=lj&&lj.auto; if(!a) return null; const m=l.competencia;
   const b=S.lanc.filter(x=>!x.auto&&x.tipo==="receita"&&x.centro===lj.id&&VENDAS_AUTO.includes(x.categoria)&&compOf(x)===m).reduce((s,x)=>s+x.valor,0);
-  if(l.auto==="mensalidade") return (a.mens&&a.mens.on)?a.mens.valor:0;
-  if(l.auto==="energia") return (a.ener&&a.ener.tipo==="fixa")?a.ener.valor:0;
+  if(l.auto==="mensalidade") return (a.mens&&a.mens.on)?histEm(a.mens,m).valor:0;
+  if(l.auto==="energia") return (a.ener&&a.ener.tipo==="fixa")?histEm(a.ener,m).valor:0;
   if(l.auto==="royalty") return (a.roy&&a.roy.on!==false)?Math.round(b*(+a.roy.pct||0)/100):0;
   return Math.round(b*pctCashback(a.cb,b)/100);
 }
@@ -2081,8 +2101,9 @@ async function sincAuto(){
       // mensalidade e energia: todo mês, de "a partir de" até o mês seguinte (loja ativa)
       if(lj.ativa!==false){
         for(let m=desde; m<=addMonths(cur,1); m=addMonths(m,1)){
-          if(a.mens&&a.mens.on&&a.mens.valor>0) desejo[chave("mens",lj.id,m)]={auto:"mensalidade",lj,m,v:a.mens.valor,venc:proxDiaUtil(`${m}-${pad(a.mens.dia||7)}`),cat:"cop_sistema",forma:"Boleto",desc:`Mensalidade de sistema — ${mlabel(m)}`,obs:`Mensalidade fixa configurada na loja (${fmt(a.mens.valor)}/mês).`};
-          if(a.ener&&a.ener.tipo==="fixa"&&a.ener.valor>0) desejo[chave("ener",lj.id,m)]={auto:"energia",lj,m,v:a.ener.valor,venc:proxDiaUtil(`${m}-${pad(a.ener.dia||15)}`),cat:"cop_energia",forma:"Boleto",desc:`Energia — ${mlabel(m)}`,obs:`Energia fixa configurada na loja (${fmt(a.ener.valor)}/mês).`};
+          const hm=histEm(a.mens,m), he=histEm(a.ener,m);
+          if(a.mens&&a.mens.on&&hm.valor>0) desejo[chave("mens",lj.id,m)]={auto:"mensalidade",lj,m,v:hm.valor,venc:proxDiaUtil(`${m}-${pad(hm.dia||7)}`),cat:"cop_sistema",forma:"Boleto",desc:`Mensalidade de sistema — ${mlabel(m)}`,obs:`Mensalidade fixa configurada na loja (${fmt(hm.valor)}/mês).`};
+          if(a.ener&&a.ener.tipo==="fixa"&&he.valor>0) desejo[chave("ener",lj.id,m)]={auto:"energia",lj,m,v:he.valor,venc:proxDiaUtil(`${m}-${pad(he.dia||15)}`),cat:"cop_energia",forma:"Boleto",desc:`Energia — ${mlabel(m)}`,obs:`Energia fixa configurada na loja (${fmt(he.valor)}/mês).`};
           if(a.ener&&a.ener.tipo==="var") desejo[chave("ener",lj.id,m)]={auto:"energia",lj,m,v:0,pend:true,venc:proxDiaUtil(`${m}-${pad(a.ener.dia||15)}`),cat:"cop_energia",forma:"Boleto",desc:`Energia — ${mlabel(m)}`,obs:`Energia variável: digite o valor da conta deste mês.`};
         }
       }
